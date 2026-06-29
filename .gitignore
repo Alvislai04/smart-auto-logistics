@@ -1,0 +1,106 @@
+# =========================
+# Operating System Files
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# Editor / IDE Files
+# =========================
+.vscode/
+.idea/
+*.iml
+
+# Keep VS Code settings if you want team sharing later
+# !.vscode/settings.json
+# !.vscode/extensions.json
+
+# =========================
+# Environment / Secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Java / Spring Boot Backend
+# =========================
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+backend/.flattened-pom.xml
+
+# Maven / Gradle general
+target/
+build/
+.gradle/
+.mvn/timing.properties
+
+# Spring Boot generated files
+*.class
+*.jar
+*.war
+*.ear
+
+# =========================
+# Node / React Frontend
+# =========================
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+frontend/.env
+frontend/.env.*
+
+# =========================
+# Blockchain / Hardhat
+# =========================
+blockchain/node_modules/
+blockchain/artifacts/
+blockchain/cache/
+blockchain/typechain/
+blockchain/typechain-types/
+blockchain/coverage/
+blockchain/coverage.json
+blockchain/.env
+blockchain/.env.*
+
+# =========================
+# Database / Local Files
+# =========================
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.backup
+
+# =========================
+# Test / Coverage
+# =========================
+coverage/
+.nyc_output/
+
+# =========================
+# Temporary Files
+# =========================
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+
+# =========================
+# Package Manager Cache
+# =========================
+.pnpm-store/
+.yarn/

@@ -1,0 +1,55 @@
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(160px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.summary-card {
+  position: relative;
+  overflow: hidden;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+.summary-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: linear-gradient(180deg, var(--color-primary), #60a5fa);
+}
+
+.summary-title {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.summary-card h2 {
+  margin: 10px 0;
+  font-size: 34px;
+  letter-spacing: -0.05em;
+}
+
+.summary-description {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+@media (max-width: 1200px) {
+  .summary-grid {
+    grid-template-columns: repeat(3, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+}

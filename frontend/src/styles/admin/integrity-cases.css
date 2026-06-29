@@ -1,0 +1,179 @@
+.integrity-summary-grid {
+  grid-template-columns: repeat(5, minmax(150px, 1fr));
+}
+
+.integrity-layout {
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 20px;
+}
+
+.integrity-toolbar {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.integrity-case-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.integrity-case-card {
+  width: 100%;
+  text-align: left;
+  color: var(--color-text);
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  box-shadow: none;
+}
+
+.integrity-case-card:hover {
+  background: white;
+  border-color: var(--color-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.integrity-case-card.active {
+  border-color: var(--color-primary);
+  background: white;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+}
+
+.integrity-case-card p {
+  color: #475569;
+  margin: 8px 0;
+}
+
+.integrity-case-header,
+.integrity-detail-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.integrity-status {
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.integrity-status.open {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.integrity-status.under_investigation {
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
+}
+
+.integrity-status.company_notified {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.integrity-status.resolved {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.integrity-status.escalated {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+}
+
+.integrity-detail h3 {
+  margin: 0;
+}
+
+.integrity-detail-header p {
+  margin: 8px 0 0;
+  color: #475569;
+}
+
+.integrity-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.integrity-meta-grid div {
+  padding: 13px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+}
+
+.integrity-meta-grid span {
+  display: block;
+  color: var(--color-muted);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.integrity-detail textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.integrity-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0 20px;
+}
+
+.resolve-section {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--color-border);
+}
+
+.resolve-section h4 {
+  margin: 0 0 14px;
+}
+
+.resolved-message {
+  padding: 15px;
+  border-radius: var(--radius-md);
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+  margin-top: 14px;
+}
+
+.resolved-message p {
+  margin: 6px 0;
+}
+
+@media (max-width: 1250px) {
+  .integrity-summary-grid {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
+
+  .integrity-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 780px) {
+  .integrity-summary-grid,
+  .integrity-toolbar,
+  .integrity-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .integrity-detail-header,
+  .integrity-case-header {
+    flex-direction: column;
+  }
+}

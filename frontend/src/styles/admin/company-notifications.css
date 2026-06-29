@@ -1,0 +1,73 @@
+.company-notification-toolbar {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.company-notification-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.company-notification-card {
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-soft);
+}
+
+.company-notification-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 12px;
+}
+
+.company-notification-header p {
+  margin: 6px 0 0;
+  color: var(--color-muted);
+}
+
+.company-notification-status {
+  align-self: flex-start;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.company-notification-status.sent {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.company-notification-status.failed {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+}
+
+.company-notification-message {
+  margin: 0 0 12px;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.company-notification-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+@media (max-width: 780px) {
+  .company-notification-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .company-notification-header {
+    flex-direction: column;
+  }
+}

@@ -1,0 +1,107 @@
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.86), rgba(30, 64, 175, 0.78)),
+    url("../assets/hero.png");
+  background-size: cover;
+  background-position: center;
+}
+
+.auth-card {
+  width: min(980px, 100%);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  border-radius: 28px;
+  padding: 34px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(18px);
+}
+
+.auth-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.auth-header h1 {
+  margin: 0 0 10px;
+  font-size: 34px;
+  letter-spacing: -0.05em;
+}
+
+.auth-header p {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.role-login-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+}
+
+.role-login-card {
+  position: relative;
+  overflow: hidden;
+  text-align: left;
+  color: var(--color-heading);
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+}
+
+.role-login-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: linear-gradient(180deg, var(--color-primary), #60a5fa);
+}
+
+.role-login-card:hover {
+  background: #f8fafc;
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.role-login-card strong {
+  display: block;
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.role-login-card span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--color-text);
+}
+
+.auth-note {
+  margin: 24px 0 0;
+  color: var(--color-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.access-denied-panel {
+  max-width: 560px;
+}
+
+@media (max-width: 720px) {
+  .auth-card {
+    padding: 24px;
+  }
+
+  .auth-header h1 {
+    font-size: 26px;
+  }
+
+  .role-login-grid {
+    grid-template-columns: 1fr;
+  }
+}
