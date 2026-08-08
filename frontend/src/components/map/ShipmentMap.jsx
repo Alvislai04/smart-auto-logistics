@@ -1,4 +1,5 @@
 import {
+  CircleMarker,
   MapContainer,
   Marker,
   Polyline,
@@ -6,6 +7,7 @@ import {
   TileLayer,
 } from "react-leaflet";
 import L from "leaflet";
+import { formatEnumLabel } from "../../utils/formatters";
 
 const vehicleMarkerIcon = new L.Icon({
   iconUrl:
@@ -20,8 +22,23 @@ const vehicleMarkerIcon = new L.Icon({
   shadowSize: [41, 41],
 });
 
+function hasCoordinate(value) {
+  return value !== null && value !== undefined && Number.isFinite(Number(value));
+}
+
 function ShipmentMap({ latestTracking, trackingEvents = [], shipment }) {
-  if (!latestTracking) {
+  const hasLatestPosition =
+    latestTracking?.latitude !== null &&
+    latestTracking?.longitude !== null &&
+    latestTracking?.latitude !== undefined &&
+    latestTracking?.longitude !== undefined;
+  const hasPlannedRoute =
+    hasCoordinate(shipment?.originLatitude) &&
+    hasCoordinate(shipment?.originLongitude) &&
+    hasCoordinate(shipment?.destinationLatitude) &&
+    hasCoordinate(shipment?.destinationLongitude);
+
+  if (!hasLatestPosition && !hasPlannedRoute) {
     return (
       <div className="map-placeholder">
         <p>No tracking location available yet.</p>
@@ -29,7 +46,24 @@ function ShipmentMap({ latestTracking, trackingEvents = [], shipment }) {
     );
   }
 
-  const latestPosition = [latestTracking.latitude, latestTracking.longitude];
+  const plannedOrigin = hasPlannedRoute
+    ? [Number(shipment.originLatitude), Number(shipment.originLongitude)]
+    : null;
+  const plannedDestination = hasPlannedRoute
+    ? [
+        Number(shipment.destinationLatitude),
+        Number(shipment.destinationLongitude),
+      ]
+    : null;
+  const latestPosition = hasLatestPosition
+    ? [latestTracking.latitude, latestTracking.longitude]
+    : null;
+  const mapCenter =
+    latestPosition ??
+    [
+      (plannedOrigin[0] + plannedDestination[0]) / 2,
+      (plannedOrigin[1] + plannedDestination[1]) / 2,
+    ];
 
   const routePositions = trackingEvents
     .filter((event) => event.latitude !== null && event.longitude !== null)
@@ -38,7 +72,7 @@ function ShipmentMap({ latestTracking, trackingEvents = [], shipment }) {
   return (
     <div className="map-wrapper">
       <MapContainer
-        center={latestPosition}
+        center={mapCenter}
         zoom={13}
         scrollWheelZoom={false}
         className="shipment-map"
@@ -58,17 +92,57 @@ function ShipmentMap({ latestTracking, trackingEvents = [], shipment }) {
           />
         )}
 
-        <Marker position={latestPosition} icon={vehicleMarkerIcon}>
-          <Popup>
-            <strong>{shipment?.shipmentCode || "Shipment"}</strong>
-            <br />
-            Vehicle: {shipment?.vehicleModel || "-"}
-            <br />
-            Speed: {latestTracking.speed} km/h
-            <br />
-            Condition: {latestTracking.conditionStatus}
-          </Popup>
-        </Marker>
+        {hasPlannedRoute && (
+          <>
+            <Polyline
+              positions={[plannedOrigin, plannedDestination]}
+              pathOptions={{
+                color: "#0f766e",
+                dashArray: "8 8",
+                weight: 3,
+                opacity: 0.85,
+              }}
+            />
+
+            <CircleMarker
+              center={plannedOrigin}
+              radius={8}
+              pathOptions={{ color: "#15803d", fillOpacity: 0.85 }}
+            >
+              <Popup>
+                <strong>Planned Origin</strong>
+                <br />
+                {shipment.origin}
+              </Popup>
+            </CircleMarker>
+
+            <CircleMarker
+              center={plannedDestination}
+              radius={8}
+              pathOptions={{ color: "#dc2626", fillOpacity: 0.85 }}
+            >
+              <Popup>
+                <strong>Planned Destination</strong>
+                <br />
+                {shipment.destination}
+              </Popup>
+            </CircleMarker>
+          </>
+        )}
+
+        {latestPosition && (
+          <Marker position={latestPosition} icon={vehicleMarkerIcon}>
+            <Popup>
+              <strong>{shipment?.shipmentCode || "Shipment"}</strong>
+              <br />
+              Vehicle: {shipment?.vehicleModel || "-"}
+              <br />
+              Speed: {latestTracking.speed} km/h
+              <br />
+              Condition: {formatEnumLabel(latestTracking.conditionStatus)}
+            </Popup>
+          </Marker>
+        )}
       </MapContainer>
     </div>
   );

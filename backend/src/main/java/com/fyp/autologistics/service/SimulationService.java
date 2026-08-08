@@ -4,11 +4,8 @@ import com.fyp.autologistics.dto.CreateTrackingEventRequest;
 import com.fyp.autologistics.dto.SimulateTrackingRequest;
 import com.fyp.autologistics.dto.TrackingEventResponse;
 import com.fyp.autologistics.entity.Shipment;
-import com.fyp.autologistics.enums.AlertSeverity;
-import com.fyp.autologistics.enums.AlertType;
 import com.fyp.autologistics.enums.ConditionStatus;
 import com.fyp.autologistics.enums.ShipmentStatus;
-import com.fyp.autologistics.enums.ShipmentEventType;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.ThreadLocalRandom;
@@ -18,19 +15,13 @@ public class SimulationService {
 
     private final ShipmentService shipmentService;
     private final TrackingEventService trackingEventService;
-    private final AlertService alertService;
-    private final ShipmentEventService shipmentEventService;
 
     public SimulationService(
             ShipmentService shipmentService,
-            TrackingEventService trackingEventService,
-            AlertService alertService,
-            ShipmentEventService shipmentEventService
+            TrackingEventService trackingEventService
     ) {
         this.shipmentService = shipmentService;
         this.trackingEventService = trackingEventService;
-        this.alertService = alertService;
-        this.shipmentEventService = shipmentEventService;
     }
 
     public TrackingEventResponse simulateNextTrackingPoint(
@@ -47,6 +38,8 @@ public class SimulationService {
 
         ConditionStatus conditionStatus = determineConditionStatus(speed);
 
+        updateShipmentStatusBasedOnCondition(shipmentId, conditionStatus);
+
         TrackingEventResponse trackingEventResponse = createTrackingEvent(
                 shipmentId,
                 nextLatitude,
@@ -54,9 +47,6 @@ public class SimulationService {
                 speed,
                 conditionStatus
         );
-
-        updateShipmentStatusBasedOnCondition(shipmentId, conditionStatus);
-        createAlertIfConditionIsAbnormal(shipmentId, conditionStatus, speed);
 
         return trackingEventResponse;
     }
@@ -86,51 +76,6 @@ public class SimulationService {
         return trackingEventService.createTrackingEvent(shipmentId, trackingRequest);
     }
 
-    private void createAlertIfConditionIsAbnormal(
-            Long shipmentId,
-            ConditionStatus conditionStatus,
-            double speed
-    ) {
-        Shipment shipment = shipmentService.findShipmentEntityById(shipmentId);
-
-        if (conditionStatus == ConditionStatus.IDLE) {
-            shipmentEventService.createEventForShipment(
-                    shipment,
-                    ShipmentEventType.IDLE_DETECTED,
-                    "Idle condition detected. Vehicle speed is " + speed + " km/h.",
-                    null,
-                    null
-            );
-
-            alertService.createAlertIfNotOpen(
-                    shipmentId,
-                    AlertType.IDLE,
-                    AlertSeverity.MEDIUM,
-                    "Vehicle idle detected",
-                    "The vehicle appears to be idle or not moving. Current speed: " + speed + " km/h."
-            );
-            return;
-        }
-
-        if (conditionStatus == ConditionStatus.DELAYED) {
-            shipmentEventService.createEventForShipment(
-                    shipment,
-                    ShipmentEventType.DELAY_DETECTED,
-                    "Delay condition detected. Vehicle speed is " + speed + " km/h.",
-                    null,
-                    null
-            );
-
-            alertService.createAlertIfNotOpen(
-                    shipmentId,
-                    AlertType.DELAY,
-                    AlertSeverity.HIGH,
-                    "Possible shipment delay detected",
-                    "The vehicle speed is below the expected movement threshold. Current speed: " + speed + " km/h."
-            );
-        }
-    }
-
     private double generateNextCoordinate(Double currentCoordinate) {
         double movementOffset = ThreadLocalRandom.current().nextDouble(0.001, 0.006);
         return currentCoordinate + movementOffset;
@@ -153,23 +98,23 @@ public class SimulationService {
     }
 
     private void updateShipmentStatusBasedOnCondition(
-        Long shipmentId,
-        ConditionStatus conditionStatus
-) {
-    Shipment shipment = shipmentService.findShipmentEntityById(shipmentId);
+            Long shipmentId,
+            ConditionStatus conditionStatus
+    ) {
+        Shipment shipment = shipmentService.findShipmentEntityById(shipmentId);
 
-    if (conditionStatus == ConditionStatus.DELAYED
-            || conditionStatus == ConditionStatus.IDLE
-            || conditionStatus == ConditionStatus.ROUTE_DEVIATION) {
-        shipment.setStatus(ShipmentStatus.DELAYED);
-        shipmentService.saveShipmentEntity(shipment);
-        return;
-    }
+        if (conditionStatus == ConditionStatus.DELAYED
+                || conditionStatus == ConditionStatus.IDLE
+                || conditionStatus == ConditionStatus.ROUTE_DEVIATION) {
+            shipment.setStatus(ShipmentStatus.DELAYED);
+            shipmentService.saveShipmentEntity(shipment);
+            return;
+        }
 
-    if (conditionStatus == ConditionStatus.NORMAL
-            && shipment.getStatus() == ShipmentStatus.DELAYED) {
-        shipment.setStatus(ShipmentStatus.IN_TRANSIT);
-        shipmentService.saveShipmentEntity(shipment);
+        if (conditionStatus == ConditionStatus.NORMAL
+                && shipment.getStatus() == ShipmentStatus.DELAYED) {
+            shipment.setStatus(ShipmentStatus.IN_TRANSIT);
+            shipmentService.saveShipmentEntity(shipment);
+        }
     }
-}
 }

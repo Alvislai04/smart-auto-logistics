@@ -1,63 +1,236 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { shipmentApi } from "../api/shipmentApi";
 import ShipmentForm from "../components/forms/ShipmentForm";
 
+const emptyFormOptions = {
+  vehicleModels: [],
+  manufacturerOrigins: [],
+  dealershipDestinations: [],
+};
+
 const initialFormData = {
-  shipmentCode: "",
   vehicleVin: "",
-  vehicleModel: "",
+  vehicleModelKey: "",
+  manufacturerKey: "",
+  dealershipKey: "",
   origin: "",
   destination: "",
+  originLatitude: "",
+  originLongitude: "",
+  destinationLatitude: "",
+  destinationLongitude: "",
   dealershipName: "",
   estimatedArrival: "",
+  estimatedDeparture: "",
+  currentStage: "MANUFACTURING",
+  stockLocation: "",
+  workInProgressStatus: "NOT_APPLICABLE",
+  responsiblePerson: "",
+  responsibleContact: "",
+  customerName: "",
+  customerContact: "",
+  customerAddress: "",
+  shipmentDocumentReference: "",
 };
+
+function toFormValue(value) {
+  return value == null ? "" : String(value);
+}
+
+function findOptionByKey(options, optionKey) {
+  return options.find((option) => option.key === optionKey);
+}
+
+function applyManufacturerSelection(formData, manufacturerKey, formOptions) {
+  const manufacturer = findOptionByKey(
+    formOptions.manufacturerOrigins,
+    manufacturerKey,
+  );
+
+  return {
+    ...formData,
+    manufacturerKey: toFormValue(manufacturerKey),
+    origin: manufacturer?.location ?? "",
+    originLatitude: toFormValue(manufacturer?.latitude),
+    originLongitude: toFormValue(manufacturer?.longitude),
+  };
+}
+
+function applyDealershipSelection(formData, dealershipKey, formOptions) {
+  const dealership = findOptionByKey(
+    formOptions.dealershipDestinations,
+    dealershipKey,
+  );
+
+  return {
+    ...formData,
+    dealershipKey: toFormValue(dealershipKey),
+    dealershipName: dealership?.name ?? "",
+    destination: dealership?.location ?? "",
+    destinationLatitude: toFormValue(dealership?.latitude),
+    destinationLongitude: toFormValue(dealership?.longitude),
+  };
+}
+
+function applyDefaultOptions(formData, formOptions) {
+  const manufacturerKey =
+    formData.manufacturerKey ||
+    toFormValue(formOptions.manufacturerOrigins[0]?.key);
+  const dealershipKey =
+    formData.dealershipKey ||
+    toFormValue(formOptions.dealershipDestinations[0]?.key);
+
+  let nextFormData = {
+    ...formData,
+    vehicleModelKey:
+      formData.vehicleModelKey || formOptions.vehicleModels[0]?.key || "",
+  };
+
+  nextFormData = applyManufacturerSelection(
+    nextFormData,
+    manufacturerKey,
+    formOptions,
+  );
+  nextFormData = applyDealershipSelection(
+    nextFormData,
+    dealershipKey,
+    formOptions,
+  );
+
+  return nextFormData;
+}
 
 function CreateShipmentPage() {
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState(initialFormData);
+  const [formOptions, setFormOptions] = useState(emptyFormOptions);
+  const [isLoadingOptions, setIsLoadingOptions] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+
+  const loadFormOptions = useCallback(async () => {
+    try {
+      setIsLoadingOptions(true);
+      setErrorMessage("");
+
+      const options = await shipmentApi.getFormOptions();
+      const normalizedOptions = {
+        vehicleModels: options.vehicleModels ?? [],
+        manufacturerOrigins: options.manufacturerOrigins ?? [],
+        dealershipDestinations: options.dealershipDestinations ?? [],
+      };
+
+      setFormOptions(normalizedOptions);
+      setFormData((previousFormData) =>
+        applyDefaultOptions(previousFormData, normalizedOptions),
+      );
+
+      if (
+        normalizedOptions.vehicleModels.length === 0 ||
+        normalizedOptions.manufacturerOrigins.length === 0 ||
+        normalizedOptions.dealershipDestinations.length === 0
+      ) {
+        setErrorMessage(
+          "Shipment options are incomplete. Please configure manufacturer and dealership profiles.",
+        );
+      }
+    } catch (error) {
+      setErrorMessage(
+        error.response?.data?.message || "Failed to load shipment form options.",
+      );
+    } finally {
+      setIsLoadingOptions(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFormOptions();
+  }, [loadFormOptions]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
 
-    setFormData((previousValue) => ({
-      ...previousValue,
-      [name]: value,
-    }));
+    setFormData((previousValue) => {
+      if (name === "manufacturerKey") {
+        return applyManufacturerSelection(previousValue, value, formOptions);
+      }
+
+      if (name === "dealershipKey") {
+        return applyDealershipSelection(previousValue, value, formOptions);
+      }
+
+      return {
+        ...previousValue,
+        [name]: value,
+      };
+    });
   };
 
   const buildCreateShipmentPayload = () => {
+    const nullableText = (value) => {
+      const trimmedValue = value.trim();
+      return trimmedValue || null;
+    };
+
     return {
-      shipmentCode: formData.shipmentCode.trim(),
+      manufacturerKey: formData.manufacturerKey,
+      dealershipKey: formData.dealershipKey,
       vehicleVin: formData.vehicleVin.trim(),
-      vehicleModel: formData.vehicleModel.trim(),
-      origin: formData.origin.trim(),
-      destination: formData.destination.trim(),
-      dealershipName: formData.dealershipName.trim(),
+      vehicleModelKey: formData.vehicleModelKey,
       estimatedArrival: formData.estimatedArrival,
+      estimatedDeparture: formData.estimatedDeparture,
+      currentStage: formData.currentStage,
+      stockLocation: formData.stockLocation.trim(),
+      workInProgressStatus: formData.workInProgressStatus,
+      responsiblePerson: formData.responsiblePerson.trim(),
+      responsibleContact: formData.responsibleContact.trim(),
+      customerName: formData.customerName.trim(),
+      customerContact: formData.customerContact.trim(),
+      customerAddress: formData.customerAddress.trim(),
+      shipmentDocumentReference: nullableText(
+        formData.shipmentDocumentReference,
+      ),
     };
   };
 
   const validateForm = () => {
     const requiredFields = [
-      "shipmentCode",
+      "manufacturerKey",
+      "dealershipKey",
       "vehicleVin",
-      "vehicleModel",
-      "origin",
-      "destination",
-      "dealershipName",
+      "vehicleModelKey",
       "estimatedArrival",
+      "estimatedDeparture",
+      "currentStage",
+      "stockLocation",
+      "workInProgressStatus",
+      "responsiblePerson",
+      "responsibleContact",
+      "customerName",
+      "customerContact",
+      "customerAddress",
     ];
 
     const hasEmptyField = requiredFields.some(
-      (fieldName) => !formData[fieldName]?.trim(),
+      (fieldName) => !String(formData[fieldName] ?? "").trim(),
     );
 
     if (hasEmptyField) {
       setErrorMessage("Please complete all required fields.");
+      return false;
+    }
+
+    if (!formData.origin || !formData.destination || !formData.dealershipName) {
+      setErrorMessage("Please select a valid manufacturer and dealership.");
+      return false;
+    }
+
+    if (
+      new Date(formData.estimatedArrival) <= new Date(formData.estimatedDeparture)
+    ) {
+      setErrorMessage("Estimated arrival must be after estimated departure.");
       return false;
     }
 
@@ -93,7 +266,7 @@ function CreateShipmentPage() {
       <div className="page-header">
         <div>
           <h2>Create Shipment</h2>
-          <p>Register a new vehicle shipment record.</p>
+          <p>Register vehicle, route, operation, and receiver details.</p>
         </div>
 
         <button type="button" onClick={() => navigate("/shipments")}>
@@ -105,6 +278,8 @@ function CreateShipmentPage() {
 
       <ShipmentForm
         formData={formData}
+        formOptions={formOptions}
+        isLoadingOptions={isLoadingOptions}
         isSubmitting={isSubmitting}
         submitButtonLabel="Create Shipment"
         onChange={handleChange}

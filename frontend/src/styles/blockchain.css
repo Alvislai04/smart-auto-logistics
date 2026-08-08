@@ -113,6 +113,51 @@
   margin-bottom: 4px;
 }
 
+.verification-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.verification-summary-card {
+  padding: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+}
+
+.verification-summary-card span {
+  display: block;
+  color: var(--color-muted);
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+
+.verification-summary-card strong {
+  color: var(--color-heading);
+}
+
+.blockchain-record-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.blockchain-record-item {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(260px, 1.2fr);
+  gap: 18px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+}
+
+.blockchain-record-item p {
+  margin: 7px 0 0;
+}
+
 .hash-section {
   display: flex;
   flex-direction: column;
@@ -145,7 +190,9 @@
 
 @media (max-width: 900px) {
   .blockchain-summary-grid,
-  .blockchain-monitor-meta {
+  .blockchain-monitor-meta,
+  .verification-summary-grid,
+  .blockchain-record-item {
     grid-template-columns: 1fr;
   }
 

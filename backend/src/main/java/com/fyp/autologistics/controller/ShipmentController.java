@@ -1,13 +1,14 @@
 package com.fyp.autologistics.controller;
 
+import com.fyp.autologistics.dto.ConfirmDeliveryReceiptRequest;
 import com.fyp.autologistics.dto.CreateShipmentRequest;
+import com.fyp.autologistics.dto.ShipmentPageResponse;
 import com.fyp.autologistics.dto.ShipmentResponse;
+import com.fyp.autologistics.enums.LogisticsStage;
 import com.fyp.autologistics.enums.ShipmentStatus;
 import com.fyp.autologistics.service.ShipmentService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/shipments")
@@ -26,8 +27,24 @@ public class ShipmentController {
     }
 
     @GetMapping
-    public List<ShipmentResponse> getAllShipments() {
-        return shipmentService.getAllShipments();
+    public ShipmentPageResponse searchShipments(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) ShipmentStatus status,
+            @RequestParam(required = false) LogisticsStage stage,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "DESC") String sortDirection
+    ) {
+        return shipmentService.searchShipments(
+                search,
+                status,
+                stage,
+                page,
+                size,
+                sortBy,
+                sortDirection
+        );
     }
 
     @GetMapping("/{id}")
@@ -41,6 +58,14 @@ public class ShipmentController {
             @RequestParam ShipmentStatus status
     ) {
         return shipmentService.updateShipmentStatus(id, status);
+    }
+
+    @PutMapping("/{id}/receipt-confirmation")
+    public ShipmentResponse confirmDeliveryReceipt(
+            @PathVariable Long id,
+            @Valid @RequestBody ConfirmDeliveryReceiptRequest request
+    ) {
+        return shipmentService.confirmDeliveryReceipt(id, request);
     }
 
     @DeleteMapping("/{id}")

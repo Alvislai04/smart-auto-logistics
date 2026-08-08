@@ -18,15 +18,18 @@ public class TrackingEventService {
     private final TrackingEventRepository trackingEventRepository;
     private final ShipmentService shipmentService;
     private final ShipmentEventService shipmentEventService;
+    private final AlertService alertService;
 
     public TrackingEventService(
             TrackingEventRepository trackingEventRepository,
             ShipmentService shipmentService,
-            ShipmentEventService shipmentEventService
+            ShipmentEventService shipmentEventService,
+            AlertService alertService
     ) {
         this.trackingEventRepository = trackingEventRepository;
         this.shipmentService = shipmentService;
         this.shipmentEventService = shipmentEventService;
+        this.alertService = alertService;
     }
 
     public TrackingEventResponse createTrackingEvent(Long shipmentId, CreateTrackingEventRequest request) {
@@ -37,11 +40,7 @@ public class TrackingEventService {
         trackingEvent.setLatitude(request.getLatitude());
         trackingEvent.setLongitude(request.getLongitude());
         trackingEvent.setSpeed(request.getSpeed());
-        trackingEvent.setConditionStatus(
-                request.getConditionStatus() != null
-                        ? request.getConditionStatus()
-                        : ConditionStatus.NORMAL
-        );
+        trackingEvent.setConditionStatus(resolveConditionStatus(request));
 
         TrackingEvent savedTrackingEvent = trackingEventRepository.save(trackingEvent);
 
@@ -58,6 +57,8 @@ public class TrackingEventService {
                 null,
                 null
         );
+
+        alertService.evaluateShipmentMonitoringRules(shipment, savedTrackingEvent);
 
         return mapToResponse(savedTrackingEvent);
     }
@@ -93,5 +94,21 @@ public class TrackingEventService {
                 ));
 
         return mapToResponse(latestTrackingEvent);
+    }
+
+    private ConditionStatus resolveConditionStatus(CreateTrackingEventRequest request) {
+        if (request.getConditionStatus() != null) {
+            return request.getConditionStatus();
+        }
+
+        if (request.getSpeed() <= 1.0) {
+            return ConditionStatus.IDLE;
+        }
+
+        if (request.getSpeed() < 15.0) {
+            return ConditionStatus.DELAYED;
+        }
+
+        return ConditionStatus.NORMAL;
     }
 }

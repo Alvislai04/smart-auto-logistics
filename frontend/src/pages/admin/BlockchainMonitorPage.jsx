@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { blockchainApi } from "../../api/blockchainApi";
 
 function BlockchainMonitorPage() {
@@ -9,23 +9,24 @@ function BlockchainMonitorPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [verifyingRecordId, setVerifyingRecordId] = useState(null);
 
-  useEffect(() => {
-    loadBlockchainRecords();
-  }, []);
-
-  const loadBlockchainRecords = async () => {
+  const loadBlockchainRecords = useCallback(async () => {
     try {
       setIsLoading(true);
       setErrorMessage("");
 
       const data = await blockchainApi.getAll();
       setRecords(data);
-    } catch (error) {
+    } catch {
       setErrorMessage("Failed to load blockchain records.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadBlockchainRecords();
+  }, [loadBlockchainRecords]);
 
   const handleVerifyRecord = async (recordId) => {
     try {

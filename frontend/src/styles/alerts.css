@@ -15,9 +15,33 @@
   background: var(--color-surface-soft);
 }
 
+.alert-item.eta_overdue,
+.alert-item.route_deviation,
+.alert-item.progress_shortfall {
+  border-left-color: #dc2626;
+}
+
+.alert-item.missing_update,
+.alert-item.sensor_warning {
+  border-left-color: #f59e0b;
+}
+
+.alert-item.idle {
+  border-left-color: #6366f1;
+}
+
 .alert-item p {
   margin: 6px 0;
   color: #475569;
+}
+
+.alert-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: var(--color-muted);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .alert-actions {
@@ -32,6 +56,14 @@
   }
 
   .alert-actions {
+    flex-wrap: wrap;
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  .alert-actions,
+  .alert-actions button {
+    width: 100%;
   }
 }

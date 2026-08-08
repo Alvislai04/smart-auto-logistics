@@ -1,6 +1,10 @@
 function BlockchainRecordPanel({ blockchainRecords }) {
   const hasRecords = blockchainRecords.length > 0;
   const latestRecord = hasRecords ? blockchainRecords[0] : null;
+  const latestStatus = latestRecord?.status ?? "PENDING";
+  const recordedCount = blockchainRecords.filter(
+    (record) => record.status === "RECORDED",
+  ).length;
 
   return (
     <div className="panel">
@@ -14,13 +18,9 @@ function BlockchainRecordPanel({ blockchainRecords }) {
         </div>
 
         <span
-          className={
-            hasRecords
-              ? "verification-badge verified"
-              : "verification-badge pending"
-          }
+          className={`verification-badge ${latestStatus.toLowerCase()}`}
         >
-          {hasRecords ? "Verified" : "Pending"}
+          {hasRecords ? latestStatus : "PENDING"}
         </span>
       </div>
 
@@ -36,13 +36,13 @@ function BlockchainRecordPanel({ blockchainRecords }) {
         <>
           <div className="verification-summary-grid">
             <div className="verification-summary-card">
-              <span>Total Verified Events</span>
-              <strong>{blockchainRecords.length}</strong>
+              <span>Recorded Events</span>
+              <strong>{recordedCount}</strong>
             </div>
 
             <div className="verification-summary-card">
               <span>Latest Block</span>
-              <strong>{latestRecord.blockNumber}</strong>
+              <strong>{latestRecord.blockNumber ?? "Not recorded"}</strong>
             </div>
 
             <div className="verification-summary-card">
@@ -60,11 +60,17 @@ function BlockchainRecordPanel({ blockchainRecords }) {
                     <strong>Status:</strong> {record.status}
                   </p>
                   <p>
-                    <strong>Block:</strong> {record.blockNumber}
+                    <strong>Block:</strong>{" "}
+                    {record.blockNumber ?? "Not recorded"}
                   </p>
                   <p>
                     <strong>Recorded At:</strong> {record.recordedAt}
                   </p>
+                  {record.verificationMessage && (
+                    <p>
+                      <strong>Message:</strong> {record.verificationMessage}
+                    </p>
+                  )}
                 </div>
 
                 <div className="hash-section">
@@ -72,7 +78,7 @@ function BlockchainRecordPanel({ blockchainRecords }) {
                   <code>{record.eventHash}</code>
 
                   <small>Transaction Hash</small>
-                  <code>{record.transactionHash}</code>
+                  <code>{record.transactionHash ?? "Not recorded"}</code>
                 </div>
               </div>
             ))}

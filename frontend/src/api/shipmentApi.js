@@ -1,8 +1,8 @@
 import axiosClient from "./axiosClient";
 
 export const shipmentApi = {
-  getAll: async () => {
-    const response = await axiosClient.get("/shipments");
+  getAll: async (params = {}) => {
+    const response = await axiosClient.get("/shipments", { params });
     return response.data;
   },
 
@@ -16,9 +16,22 @@ export const shipmentApi = {
     return response.data;
   },
 
+  getFormOptions: async () => {
+    const response = await axiosClient.get("/shipment-options");
+    return response.data;
+  },
+
   updateStatus: async (shipmentId, status) => {
     const response = await axiosClient.put(
       `/shipments/${shipmentId}/status?status=${status}`,
+    );
+    return response.data;
+  },
+
+  confirmReceipt: async (shipmentId, payload) => {
+    const response = await axiosClient.put(
+      `/shipments/${shipmentId}/receipt-confirmation`,
+      payload,
     );
     return response.data;
   },

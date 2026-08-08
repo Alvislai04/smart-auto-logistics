@@ -68,8 +68,10 @@ frontend/.env.*
 blockchain/node_modules/
 blockchain/artifacts/
 blockchain/cache/
+blockchain/deployment.local.json
 blockchain/typechain/
 blockchain/typechain-types/
+blockchain/types/
 blockchain/coverage/
 blockchain/coverage.json
 blockchain/.env

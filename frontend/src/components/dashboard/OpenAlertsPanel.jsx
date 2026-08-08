@@ -1,3 +1,5 @@
+import { formatEnumLabel } from "../../utils/formatters";
+
 function OpenAlertsPanel({ alerts }) {
   if (!alerts || alerts.length === 0) {
     return (
@@ -21,7 +23,7 @@ function OpenAlertsPanel({ alerts }) {
             </div>
 
             <span className={`severity ${alert.severity?.toLowerCase()}`}>
-              {alert.severity}
+              {formatEnumLabel(alert.severity)}
             </span>
           </div>
         ))}

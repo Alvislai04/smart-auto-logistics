@@ -1,5 +1,8 @@
 package com.fyp.autologistics.service;
 
+import com.fyp.autologistics.blockchain.BlockchainLedgerClient;
+import com.fyp.autologistics.blockchain.BlockchainLedgerException;
+import com.fyp.autologistics.blockchain.BlockchainTransactionReceipt;
 import com.fyp.autologistics.dto.BlockchainRecordResponse;
 import com.fyp.autologistics.entity.BlockchainRecord;
 import com.fyp.autologistics.enums.BlockchainRecordStatus;
@@ -18,7 +21,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.Optional;
 import java.time.LocalDateTime;
 
@@ -30,19 +32,22 @@ public class BlockchainRecordService {
     private final AdminNotificationService adminNotificationService;
     private final CompanyNotificationService companyNotificationService;
     private final IntegrityCaseService integrityCaseService;
+    private final BlockchainLedgerClient blockchainLedgerClient;
 
     public BlockchainRecordService(
         BlockchainRecordRepository blockchainRecordRepository,
         ShipmentEventRepository shipmentEventRepository,
         AdminNotificationService adminNotificationService,
         CompanyNotificationService companyNotificationService,
-        IntegrityCaseService integrityCaseService
+        IntegrityCaseService integrityCaseService,
+        BlockchainLedgerClient blockchainLedgerClient
     ) {
         this.blockchainRecordRepository = blockchainRecordRepository;
         this.shipmentEventRepository = shipmentEventRepository;
         this.adminNotificationService = adminNotificationService;
         this.companyNotificationService = companyNotificationService;
         this.integrityCaseService = integrityCaseService;
+        this.blockchainLedgerClient = blockchainLedgerClient;
     }
 
     @Transactional
@@ -57,15 +62,12 @@ public class BlockchainRecordService {
 
         String eventHash = generateSha256Hash(eventPayload);
 
-        BlockchainRecord blockchainRecord = new BlockchainRecord();
-        blockchainRecord.setShipmentId(shipmentId);
-        blockchainRecord.setShipmentEventId(shipmentEventId);
-        blockchainRecord.setEventHash(eventHash);
-        blockchainRecord.setTransactionHash(generateMockTransactionHash(eventHash));
-        blockchainRecord.setBlockNumber(generateMockBlockNumber());
-        blockchainRecord.setStatus(BlockchainRecordStatus.RECORDED);
+        BlockchainRecord savedRecord = saveRecordWithLedgerResult(
+                shipmentId,
+                shipmentEventId,
+                eventHash
+        );
 
-        BlockchainRecord savedRecord = blockchainRecordRepository.save(blockchainRecord);
         return mapToResponse(savedRecord);
     }
 
@@ -81,15 +83,12 @@ public class BlockchainRecordService {
         String eventPayload = buildEventPayload(shipmentEvent);
         String eventHash = generateSha256Hash(eventPayload);
 
-        BlockchainRecord blockchainRecord = new BlockchainRecord();
-        blockchainRecord.setShipmentId(shipmentEvent.getShipment().getId());
-        blockchainRecord.setShipmentEventId(shipmentEvent.getId());
-        blockchainRecord.setEventHash(eventHash);
-        blockchainRecord.setTransactionHash(generateMockTransactionHash(eventHash));
-        blockchainRecord.setBlockNumber(generateMockBlockNumber());
-        blockchainRecord.setStatus(BlockchainRecordStatus.RECORDED);
+        BlockchainRecord savedRecord = saveRecordWithLedgerResult(
+                shipmentEvent.getShipment().getId(),
+                shipmentEvent.getId(),
+                eventHash
+        );
 
-        BlockchainRecord savedRecord = blockchainRecordRepository.save(blockchainRecord);
         return mapToResponse(savedRecord);
     }
 
@@ -125,18 +124,40 @@ public class BlockchainRecordService {
         String recalculatedPayload = buildEventPayload(shipmentEvent);
         String recalculatedHash = generateSha256Hash(recalculatedPayload);
 
-        boolean hashMatches = blockchainRecord.getEventHash().equals(recalculatedHash);
-
         blockchainRecord.setVerifiedAt(LocalDateTime.now());
 
-        if (hashMatches) {
-            blockchainRecord.setStatus(BlockchainRecordStatus.RECORDED);
-            blockchainRecord.setVerificationMessage("Blockchain record verified successfully.");
-        } else {
+        String onChainHash;
+        try {
+            onChainHash = blockchainLedgerClient.getRecordedEventHash(
+                    blockchainRecord.getShipmentEventId()
+            );
+        } catch (BlockchainLedgerException exception) {
             blockchainRecord.setStatus(BlockchainRecordStatus.FAILED);
             blockchainRecord.setVerificationMessage(
-                    "Hash mismatch detected. Shipment event may have been modified."
+                    "Unable to verify against blockchain ledger: " + exception.getMessage()
             );
+
+            BlockchainRecord savedRecord = blockchainRecordRepository.save(blockchainRecord);
+            createBlockchainFailureNotification(savedRecord);
+            return mapToResponse(savedRecord);
+        }
+
+        boolean localHashMatchesEvent = hashesMatch(blockchainRecord.getEventHash(), recalculatedHash);
+        boolean onChainHashMatchesRecord = hashesMatch(blockchainRecord.getEventHash(), onChainHash);
+
+        if (localHashMatchesEvent && onChainHashMatchesRecord) {
+            blockchainRecord.setStatus(BlockchainRecordStatus.RECORDED);
+            blockchainRecord.setVerificationMessage(
+                    "Blockchain record verified successfully. Local event hash matches the "
+                            + "on-chain ledger hash."
+            );
+        } else {
+            blockchainRecord.setStatus(BlockchainRecordStatus.FAILED);
+            blockchainRecord.setVerificationMessage(buildVerificationFailureMessage(
+                    localHashMatchesEvent,
+                    onChainHashMatchesRecord,
+                    onChainHash
+            ));
 
             adminNotificationService.createUnreadNotificationIfNotExists(
                     AdminNotificationType.BLOCKCHAIN_TAMPER_DETECTED,
@@ -186,6 +207,95 @@ public class BlockchainRecordService {
         );
     }
 
+    private BlockchainRecord saveRecordWithLedgerResult(
+            Long shipmentId,
+            Long shipmentEventId,
+            String eventHash
+    ) {
+        BlockchainRecord blockchainRecord = new BlockchainRecord();
+        blockchainRecord.setShipmentId(shipmentId);
+        blockchainRecord.setShipmentEventId(shipmentEventId);
+        blockchainRecord.setEventHash(eventHash);
+        blockchainRecord.setStatus(BlockchainRecordStatus.PENDING);
+
+        try {
+            BlockchainTransactionReceipt receipt = blockchainLedgerClient.recordShipmentEvent(
+                    shipmentId,
+                    shipmentEventId,
+                    eventHash
+            );
+
+            blockchainRecord.setTransactionHash(receipt.transactionHash());
+            blockchainRecord.setBlockNumber(receipt.blockNumber());
+            blockchainRecord.setStatus(BlockchainRecordStatus.RECORDED);
+            blockchainRecord.setVerificationMessage("Shipment event hash recorded on blockchain.");
+        } catch (BlockchainLedgerException exception) {
+            blockchainRecord.setStatus(BlockchainRecordStatus.FAILED);
+            blockchainRecord.setVerificationMessage(
+                    "Blockchain recording failed: " + exception.getMessage()
+            );
+        }
+
+        BlockchainRecord savedRecord = blockchainRecordRepository.save(blockchainRecord);
+
+        if (savedRecord.getStatus() == BlockchainRecordStatus.FAILED) {
+            createBlockchainFailureNotification(savedRecord);
+        }
+
+        return savedRecord;
+    }
+
+    private void createBlockchainFailureNotification(BlockchainRecord blockchainRecord) {
+        adminNotificationService.createUnreadNotificationIfNotExists(
+                AdminNotificationType.SYSTEM_ALERT,
+                "Blockchain ledger action failed",
+                "Blockchain record #"
+                        + blockchainRecord.getId()
+                        + " for shipment #"
+                        + blockchainRecord.getShipmentId()
+                        + " and shipment event #"
+                        + blockchainRecord.getShipmentEventId()
+                        + " needs attention. "
+                        + blockchainRecord.getVerificationMessage(),
+                "BLOCKCHAIN_RECORD",
+                blockchainRecord.getId()
+        );
+    }
+
+    private boolean hashesMatch(String leftHash, String rightHash) {
+        return normalizeHash(leftHash).equals(normalizeHash(rightHash));
+    }
+
+    private String normalizeHash(String hash) {
+        if (hash == null) {
+            return "";
+        }
+
+        return hash.startsWith("0x")
+                ? hash.substring(2).toLowerCase()
+                : hash.toLowerCase();
+    }
+
+    private String buildVerificationFailureMessage(
+            boolean localHashMatchesEvent,
+            boolean onChainHashMatchesRecord,
+            String onChainHash
+    ) {
+        if (!localHashMatchesEvent && !onChainHashMatchesRecord) {
+            return "Hash mismatch detected. The shipment event data changed locally and the "
+                    + "database hash does not match the on-chain ledger hash. On-chain hash: "
+                    + onChainHash;
+        }
+
+        if (!localHashMatchesEvent) {
+            return "Local shipment event data no longer matches the stored event hash. "
+                    + "The shipment event may have been modified after recording.";
+        }
+
+        return "Stored event hash does not match the on-chain ledger hash. On-chain hash: "
+                + onChainHash;
+    }
+
     private String generateSha256Hash(String input) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -194,14 +304,6 @@ public class BlockchainRecordService {
         } catch (Exception exception) {
             throw new IllegalStateException("Failed to generate event hash.", exception);
         }
-    }
-
-    private String generateMockTransactionHash(String eventHash) {
-        return "0x" + eventHash.substring(0, 32) + eventHash.substring(32, 64);
-    }
-
-    private Long generateMockBlockNumber() {
-        return ThreadLocalRandom.current().nextLong(100000L, 999999L);
     }
 
     private BlockchainRecordResponse mapToResponse(BlockchainRecord blockchainRecord) {
