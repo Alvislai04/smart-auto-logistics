@@ -41,6 +41,15 @@
   font-weight: 700;
 }
 
+.success-message {
+  color: var(--color-success-text);
+  background: var(--color-success-bg);
+  border: 1px solid #bbf7d0;
+  padding: 13px 14px;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+}
+
 .severity,
 .status {
   display: inline-flex;

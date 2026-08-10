@@ -32,7 +32,7 @@ public class AppUser {
     private UserRole role;
 
     @Column(nullable = false)
-    private boolean active;
+    private boolean active = true;
 
     private String companyName;
 
@@ -41,6 +41,8 @@ public class AppUser {
     private Double locationLatitude;
 
     private Double locationLongitude;
+
+    private String partyProfileKey;
 
     private LocalDateTime createdAt;
 
@@ -60,8 +62,6 @@ public class AppUser {
         if (this.updatedAt == null) {
             this.updatedAt = now;
         }
-
-        this.active = true;
     }
 
     @PreUpdate
@@ -143,6 +143,14 @@ public class AppUser {
 
     public void setLocationLongitude(Double locationLongitude) {
         this.locationLongitude = locationLongitude;
+    }
+
+    public String getPartyProfileKey() {
+        return partyProfileKey;
+    }
+
+    public void setPartyProfileKey(String partyProfileKey) {
+        this.partyProfileKey = partyProfileKey;
     }
 
     public LocalDateTime getCreatedAt() {

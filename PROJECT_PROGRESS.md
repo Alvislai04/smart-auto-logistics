@@ -35,12 +35,17 @@ Legend:
 - [x] User company/location profile fields for manufacturer and dealership routing
 - [x] Database-backed shipment party profile master data
 - [x] User role enum
-- [x] Seeded users
+- [x] Admin-created database user accounts
+- [x] Optional first-admin bootstrap configuration
 - [x] BCrypt password hashing
 - [x] Login API
 - [x] JWT generation
 - [x] JWT authentication filter
 - [x] Frontend login page connected to backend
+- [x] Production-style blank email/password login page
+- [x] Frontend hardcoded demo login users removed
+- [x] Role shortcut login cards removed
+- [x] Eye-icon password visibility toggle on login
 - [x] Frontend token storage
 - [x] Axios bearer token interceptor
 - [x] Expired or invalid JWT returns clean 401 response
@@ -48,10 +53,15 @@ Legend:
 - [x] Protected frontend routes
 - [x] Hide role-inaccessible navigation items
 - [x] Backend role authorization for admin APIs
-- [ ] Admin user management screen
-- [ ] Create user API
-- [ ] Update user role/status API
-- [ ] Reset user password flow
+- [x] Manufacturer-only shipment creation authorization
+- [x] Database-backed user role option master data
+- [x] Admin user management screen
+- [x] Create user API
+- [x] Update user role/status API
+- [x] User self-service profile update API/UI
+- [x] User self-service password change API/UI
+- [x] Non-admin account profile sync to shipment party profiles
+- [ ] Admin reset user password flow
 
 ## 3. Shipment Management
 
@@ -61,6 +71,7 @@ Legend:
 - [x] Shipment service
 - [x] Shipment controller
 - [x] Create shipment
+- [x] Shipment creation restricted to manufacturer role
 - [x] Auto-generated unique shipment code
 - [x] Backend-controlled shipment code that users cannot edit from UI
 - [x] Database-backed Mercedes-Benz vehicle model selection by unique model key
@@ -124,9 +135,10 @@ Legend:
 - [x] Route deviation detection logic
 - [x] Missing update detection logic
 - [x] Sensor warning detection logic
-- [ ] Continuous simulation start/pause/stop
-- [ ] Simulation interval control
-- [ ] Multi-vehicle simulation dashboard
+- [x] Continuous simulation start/pause/stop
+- [x] Simulation interval control
+- [x] Database-backed simulation session state
+- [x] Multi-vehicle simulation dashboard
 
 ## 6. Map and Visual Tracking UI
 
@@ -237,15 +249,24 @@ Legend:
 - [x] Total shipment count
 - [x] Shipment count by status
 - [x] Open alert count
+- [x] Role-scoped dashboard summary counts
+- [x] Dashboard-scoped open alerts
+- [x] Single dashboard overview endpoint for summary and latest open alerts
+- [x] Grouped shipment status count queries for faster Supabase dashboard reads
+- [x] Dashboard/report read endpoints avoid full active-shipment alert scans
+- [x] Dedicated admin dashboard route
+- [x] Dedicated manufacturer dashboard route
+- [x] Dedicated logistics provider dashboard route
+- [x] Dedicated dealership dashboard route
 - [x] Dashboard summary cards
 - [x] Open alerts panel
-- [ ] Shipment performance chart
-- [ ] Delay rate chart
-- [ ] Delivery completion chart
-- [ ] Shipment report page
-- [ ] Delay report page
-- [ ] Alert report page
-- [ ] Export CSV
+- [x] Shipment performance chart
+- [x] Delay rate chart
+- [x] Delivery completion chart
+- [x] Shipment report page
+- [x] Delay report page
+- [x] Alert report page
+- [x] Export CSV
 - [ ] Export PDF
 
 ## 12. UI and UX Quality
@@ -254,15 +275,28 @@ Legend:
 - [x] Topbar layout
 - [x] Role-based navigation
 - [x] Auth screen
+- [x] Normal login screen without demo credentials
+- [x] Terminal-style login screen redesign
+- [x] Animated logistics map visual on login
+- [x] Ticket-style login panel
+- [x] Login password visibility icon control
+- [x] Login redirects users to their own dashboard first
+- [x] Root path redirects authenticated users to role dashboard
+- [x] Sidebar dashboard link resolves by current role
 - [x] Dashboard page
+- [x] Reports page
 - [x] Shipment list page
 - [x] Shipment details page
 - [x] Create shipment form
+- [x] Create shipment dropdowns keep placeholder defaults until selected
 - [x] Alerts page
+- [x] Simulation sessions page
 - [x] Admin blockchain monitor page
 - [x] Admin notifications page
 - [x] Company notifications page
 - [x] Integrity cases page
+- [x] Admin user accounts page
+- [x] My account settings page
 - [~] Responsive layout baseline
 - [ ] Loading skeletons
 - [ ] Empty states for every major list
@@ -279,12 +313,16 @@ Legend:
 - [x] `frontend/src/components/blockchain`
 - [x] `frontend/src/components/dashboard`
 - [x] `frontend/src/components/forms`
+- [x] `frontend/src/components/icons`
 - [x] `frontend/src/components/layout`
 - [x] `frontend/src/components/map`
+- [x] `frontend/src/components/reports`
+- [x] `frontend/src/components/simulation`
 - [x] `frontend/src/components/shipments`
 - [x] `frontend/src/pages`
 - [x] `frontend/src/pages/admin`
 - [x] `frontend/src/pages/auth`
+- [x] `frontend/src/pages/reports`
 - [x] `frontend/src/styles/base.css`
 - [x] `frontend/src/styles/layout.css`
 - [x] `frontend/src/styles/forms.css`
@@ -292,6 +330,9 @@ Legend:
 - [x] `frontend/src/styles/dashboard.css`
 - [x] `frontend/src/styles/shipments.css`
 - [x] `frontend/src/styles/alerts.css`
+- [x] `frontend/src/styles/accounts.css`
+- [x] `frontend/src/styles/reports.css`
+- [x] `frontend/src/styles/simulation.css`
 - [x] `frontend/src/styles/map.css`
 - [x] `frontend/src/styles/blockchain.css`
 - [x] `frontend/src/styles/notifications.css`
@@ -319,6 +360,9 @@ Legend:
 - [x] Solidity contract compile
 - [x] Solidity contract tests
 - [x] Blockchain production dependency audit
+- [x] Full Supabase test-data SQL script
+- [x] Full Supabase test-data verification SQL script
+- [x] Continuous simulation test-data SQL script
 - [~] Full frontend lint
 - [ ] Backend service unit tests
 - [ ] Backend controller integration tests
@@ -332,6 +376,11 @@ Legend:
 - [x] Supabase PostgreSQL schema script
 - [x] Supabase schema supports shipment form options and unique shipment codes
 - [x] Supabase migration query for database-backed shipment master data
+- [x] Supabase migration query for shipment dropdown master data refresh
+- [x] Supabase migration query for user account role/profile management
+- [x] Supabase migration query for normal login readiness
+- [x] Supabase migration query for continuous simulation sessions
+- [x] Supabase SQL template for account password reset
 - [x] Root `.env` configured for Supabase Session Pooler
 - [x] Backend datasource loads Supabase settings from environment/config import
 - [x] Local PostgreSQL datasource fallback removed from backend config
@@ -340,7 +389,7 @@ Legend:
 
 Current known lint debt:
 
-- [ ] `frontend/src/pages/DashboardPage.jsx`
+- [x] `frontend/src/pages/DashboardPage.jsx`
 - [ ] `frontend/src/pages/admin/AdminNotificationsPage.jsx`
 - [ ] `frontend/src/pages/admin/CompanyNotificationsPage.jsx`
 - [ ] `frontend/src/pages/admin/IntegrityCasesPage.jsx`
@@ -352,9 +401,9 @@ Current known lint debt:
 2. [x] Add shipment list search/filter/pagination.
 3. [x] Add advanced alert rules: ETA overdue, missing update, route deviation,
    and plan-vs-actual shortfall.
-4. [ ] Add reporting pages and CSV export.
+4. [x] Add reporting pages and CSV export.
 5. [ ] Add retry flow for failed blockchain records.
-6. [ ] Add admin user management.
+6. [x] Add admin user management.
 7. [ ] Add email notification delivery.
 8. [ ] Clean remaining frontend lint debt.
 9. [ ] Add backend service/controller tests.

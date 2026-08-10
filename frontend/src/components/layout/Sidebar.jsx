@@ -1,8 +1,10 @@
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
+import { getDashboardPathForRole } from "../../auth/roleDashboardRoutes";
 
 const navItems = [
   {
+    key: "dashboard",
     path: "/",
     label: "Dashboard",
     roles: ["ADMIN", "MANUFACTURER", "LOGISTICS_PROVIDER", "DEALERSHIP"],
@@ -16,6 +18,26 @@ const navItems = [
     path: "/alerts",
     label: "Alerts",
     roles: ["ADMIN", "LOGISTICS_PROVIDER", "DEALERSHIP"],
+  },
+  {
+    path: "/simulation",
+    label: "Simulation",
+    roles: ["ADMIN", "LOGISTICS_PROVIDER"],
+  },
+  {
+    path: "/reports",
+    label: "Reports",
+    roles: ["ADMIN", "MANUFACTURER", "LOGISTICS_PROVIDER", "DEALERSHIP"],
+  },
+  {
+    path: "/account",
+    label: "My Account",
+    roles: ["ADMIN", "MANUFACTURER", "LOGISTICS_PROVIDER", "DEALERSHIP"],
+  },
+  {
+    path: "/admin/users",
+    label: "User Accounts",
+    roles: ["ADMIN"],
   },
   {
     path: "/admin/blockchain-monitor",
@@ -41,10 +63,13 @@ const navItems = [
 
 function Sidebar() {
   const { currentUser } = useAuth();
+  const dashboardPath = getDashboardPathForRole(currentUser?.role);
 
-  const visibleItems = navItems.filter((item) =>
-    item.roles.includes(currentUser?.role),
-  );
+  const visibleItems = navItems
+    .filter((item) => item.roles.includes(currentUser?.role))
+    .map((item) =>
+      item.key === "dashboard" ? { ...item, path: dashboardPath } : item,
+    );
 
   return (
     <aside className="sidebar">

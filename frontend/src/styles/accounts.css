@@ -1,0 +1,95 @@
+.account-management-layout,
+.account-settings-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.9fr) minmax(0, 1.4fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.account-settings-layout {
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+}
+
+.account-form .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.account-password-form {
+  display: grid;
+  gap: 18px;
+}
+
+.account-table-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.account-table-toolbar h3 {
+  margin: 0;
+}
+
+.account-table-toolbar input {
+  max-width: 320px;
+  margin-top: 0;
+}
+
+.checkbox-field {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 44px;
+}
+
+.checkbox-field input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.account-active-field {
+  align-self: end;
+}
+
+.account-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.account-status.active {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.account-status.inactive {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+@media (max-width: 1200px) {
+  .account-management-layout,
+  .account-settings-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .account-form .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .account-table-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .account-table-toolbar input {
+    max-width: none;
+  }
+}

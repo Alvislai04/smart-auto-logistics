@@ -14,37 +14,6 @@ import {
 
 const AuthContext = createContext(null);
 
-const SYSTEM_USERS = [
-  {
-    id: 1,
-    name: "Admin User",
-    email: "admin@autologistics.com",
-    password: "Admin@12345",
-    role: "ADMIN",
-  },
-  {
-    id: 2,
-    name: "Manufacturer User",
-    email: "manufacturer@autologistics.com",
-    password: "Manufacturer@12345",
-    role: "MANUFACTURER",
-  },
-  {
-    id: 3,
-    name: "Logistics Partner User",
-    email: "logistics@autologistics.com",
-    password: "Logistics@12345",
-    role: "LOGISTICS_PROVIDER",
-  },
-  {
-    id: 4,
-    name: "Dealership User",
-    email: "dealer@autologistics.com",
-    password: "Dealer@12345",
-    role: "DEALERSHIP",
-  },
-];
-
 function normalizeAuthenticatedUser(user) {
   return {
     id: user.userId ?? user.id,
@@ -52,6 +21,27 @@ function normalizeAuthenticatedUser(user) {
     email: user.email,
     role: user.role,
     token: user.token,
+    companyName: user.companyName,
+    operatingLocation: user.operatingLocation,
+    locationLatitude: user.locationLatitude,
+    locationLongitude: user.locationLongitude,
+    partyProfileKey: user.partyProfileKey,
+  };
+}
+
+function mergeAuthenticatedUser(currentUser, user) {
+  return {
+    ...currentUser,
+    id: user.userId ?? user.id ?? currentUser?.id,
+    name: user.fullName ?? user.name ?? currentUser?.name,
+    email: user.email ?? currentUser?.email,
+    role: user.role ?? currentUser?.role,
+    token: user.token ?? currentUser?.token,
+    companyName: user.companyName,
+    operatingLocation: user.operatingLocation,
+    locationLatitude: user.locationLatitude,
+    locationLongitude: user.locationLongitude,
+    partyProfileKey: user.partyProfileKey,
   };
 }
 
@@ -72,25 +62,17 @@ export function AuthProvider({ children }) {
     return authenticatedUser;
   }, []);
 
-  const loginAsRole = useCallback(
-    async (role) => {
-      const selectedUser = SYSTEM_USERS.find((user) => user.role === role);
-
-      if (!selectedUser) {
-        throw new Error("Invalid role selected.");
-      }
-
-      return login({
-        email: selectedUser.email,
-        password: selectedUser.password,
-      });
-    },
-    [login],
-  );
-
   const logout = useCallback(() => {
     clearStoredAuthUser();
     setCurrentUser(null);
+  }, []);
+
+  const updateCurrentUser = useCallback((user) => {
+    setCurrentUser((previousUser) => {
+      const nextUser = mergeAuthenticatedUser(previousUser, user);
+      storeAuthUser(nextUser);
+      return nextUser;
+    });
   }, []);
 
   const hasRole = useCallback(
@@ -107,14 +89,13 @@ export function AuthProvider({ children }) {
   const value = useMemo(
     () => ({
       currentUser,
-      systemUsers: SYSTEM_USERS,
       isAuthenticated: Boolean(currentUser),
       login,
-      loginAsRole,
       logout,
+      updateCurrentUser,
       hasRole,
     }),
-    [currentUser, hasRole, login, loginAsRole, logout],
+    [currentUser, hasRole, login, logout, updateCurrentUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

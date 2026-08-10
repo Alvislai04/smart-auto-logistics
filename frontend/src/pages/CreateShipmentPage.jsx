@@ -42,6 +42,10 @@ function findOptionByKey(options, optionKey) {
   return options.find((option) => option.key === optionKey);
 }
 
+function hasOptionKey(options, optionKey) {
+  return options.some((option) => option.key === optionKey);
+}
+
 function applyManufacturerSelection(formData, manufacturerKey, formOptions) {
   const manufacturer = findOptionByKey(
     formOptions.manufacturerOrigins,
@@ -73,18 +77,29 @@ function applyDealershipSelection(formData, dealershipKey, formOptions) {
   };
 }
 
-function applyDefaultOptions(formData, formOptions) {
-  const manufacturerKey =
-    formData.manufacturerKey ||
-    toFormValue(formOptions.manufacturerOrigins[0]?.key);
-  const dealershipKey =
-    formData.dealershipKey ||
-    toFormValue(formOptions.dealershipDestinations[0]?.key);
+function applyLoadedOptions(formData, formOptions) {
+  const vehicleModelKey = hasOptionKey(
+    formOptions.vehicleModels,
+    formData.vehicleModelKey,
+  )
+    ? formData.vehicleModelKey
+    : "";
+  const manufacturerKey = hasOptionKey(
+    formOptions.manufacturerOrigins,
+    formData.manufacturerKey,
+  )
+    ? formData.manufacturerKey
+    : "";
+  const dealershipKey = hasOptionKey(
+    formOptions.dealershipDestinations,
+    formData.dealershipKey,
+  )
+    ? formData.dealershipKey
+    : "";
 
   let nextFormData = {
     ...formData,
-    vehicleModelKey:
-      formData.vehicleModelKey || formOptions.vehicleModels[0]?.key || "",
+    vehicleModelKey,
   };
 
   nextFormData = applyManufacturerSelection(
@@ -124,7 +139,7 @@ function CreateShipmentPage() {
 
       setFormOptions(normalizedOptions);
       setFormData((previousFormData) =>
-        applyDefaultOptions(previousFormData, normalizedOptions),
+        applyLoadedOptions(previousFormData, normalizedOptions),
       );
 
       if (

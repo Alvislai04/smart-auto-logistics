@@ -18,4 +18,6 @@ public interface ShipmentPartyProfileRepository
             String partyKey,
             UserRole partyRole
     );
+
+    Optional<ShipmentPartyProfile> findByPartyKey(String partyKey);
 }

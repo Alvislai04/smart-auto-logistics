@@ -179,7 +179,7 @@ function ShipmentsPage() {
         </div>
 
         <div className="header-actions">
-          {["ADMIN", "MANUFACTURER"].includes(currentUser?.role) && (
+          {currentUser?.role === "MANUFACTURER" && (
             <Link className="button-link" to="/shipments/create">
               Create Shipment
             </Link>

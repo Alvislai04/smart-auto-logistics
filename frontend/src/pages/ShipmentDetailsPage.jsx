@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { alertApi } from "../api/alertApi";
 import { blockchainApi } from "../api/blockchainApi";
+import { simulationApi } from "../api/simulationApi";
 import { shipmentApi } from "../api/shipmentApi";
 import { shipmentEventApi } from "../api/shipmentEventApi";
 import { trackingApi } from "../api/trackingApi";
 import { useAuth } from "../auth/AuthContext";
 import BlockchainRecordPanel from "../components/blockchain/BlockchainRecordPanel";
 import ShipmentMap from "../components/map/ShipmentMap";
+import SimulationSessionControls from "../components/simulation/SimulationSessionControls";
 import ShipmentStatusActions from "../components/shipments/ShipmentStatusActions";
 import {
   formatCoordinate,
@@ -26,9 +28,28 @@ function DetailItem({ label, children }) {
   );
 }
 
+function resolveManualSimulationInput(shipment, latestTracking) {
+  return {
+    currentLatitude: latestTracking?.latitude ?? shipment?.originLatitude ?? "",
+    currentLongitude: latestTracking?.longitude ?? shipment?.originLongitude ?? "",
+    speed: latestTracking?.speed ?? "",
+  };
+}
+
+function resolveSimulationSessionInput(options, previousValue) {
+  return {
+    intervalSeconds:
+      previousValue.intervalSeconds || options?.defaultIntervalSeconds || "",
+    speed: previousValue.speed || options?.defaultSpeed || "",
+    conditionStatus: previousValue.conditionStatus || "",
+    maxEvents: previousValue.maxEvents || "",
+  };
+}
+
 function ShipmentDetailsPage() {
   const { shipmentId } = useParams();
   const { currentUser } = useAuth();
+  const currentUserRole = currentUser?.role;
 
   const [shipment, setShipment] = useState(null);
   const [latestTracking, setLatestTracking] = useState(null);
@@ -37,18 +58,30 @@ function ShipmentDetailsPage() {
   const [shipmentEvents, setShipmentEvents] = useState([]);
   const [blockchainRecords, setBlockchainRecords] = useState([]);
   const [simulationInput, setSimulationInput] = useState({
-    currentLatitude: 3.139,
-    currentLongitude: 101.6869,
-    speed: 55.0,
+    currentLatitude: "",
+    currentLongitude: "",
+    speed: "",
+  });
+  const [simulationOptions, setSimulationOptions] = useState(null);
+  const [simulationSession, setSimulationSession] = useState(null);
+  const [simulationSessionInput, setSimulationSessionInput] = useState({
+    intervalSeconds: "",
+    speed: "",
+    conditionStatus: "",
+    maxEvents: "",
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [isSimulationActionRunning, setIsSimulationActionRunning] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isConfirmingReceipt, setIsConfirmingReceipt] = useState(false);
 
-  const loadShipmentDetails = useCallback(async () => {
+  const loadShipmentDetails = useCallback(async (showLoading = true) => {
     try {
-      setIsLoading(true);
+      if (showLoading) {
+        setIsLoading(true);
+      }
       setErrorMessage("");
 
       const [shipmentData, trackingData, alertData, eventData] =
@@ -64,6 +97,7 @@ function ShipmentDetailsPage() {
       setAlerts(alertData);
       setShipmentEvents(eventData);
       setLatestTracking(trackingData.at(-1) ?? null);
+      setSimulationInput(resolveManualSimulationInput(shipmentData, trackingData.at(-1)));
 
       try {
         const blockchainData = await blockchainApi.getByShipmentId(shipmentId);
@@ -71,33 +105,157 @@ function ShipmentDetailsPage() {
       } catch {
         setBlockchainRecords([]);
       }
+
+      if (["ADMIN", "LOGISTICS_PROVIDER"].includes(currentUserRole)) {
+        const [optionsData, sessionData] = await Promise.all([
+          simulationApi.getOptions(),
+          simulationApi.getShipmentSession(shipmentId),
+        ]);
+
+        setSimulationOptions(optionsData);
+        setSimulationSession(sessionData);
+        setSimulationSessionInput((previousValue) =>
+          resolveSimulationSessionInput(optionsData, previousValue),
+        );
+      }
     } catch {
       setErrorMessage("Failed to load shipment details.");
     } finally {
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
     }
-  }, [shipmentId]);
+  }, [currentUserRole, shipmentId]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadShipmentDetails();
   }, [loadShipmentDetails]);
 
+  useEffect(() => {
+    if (simulationSession?.status !== "ACTIVE") {
+      return undefined;
+    }
+
+    const refreshIntervalId = window.setInterval(() => {
+      loadShipmentDetails(false);
+    }, 6000);
+
+    return () => window.clearInterval(refreshIntervalId);
+  }, [loadShipmentDetails, simulationSession?.status]);
+
   const handleSimulationChange = (event) => {
     const { name, value } = event.target;
 
     setSimulationInput((previousValue) => ({
       ...previousValue,
-      [name]: Number(value),
+      [name]: value,
     }));
   };
 
   const handleSimulateNextPoint = async () => {
+    if (
+      simulationInput.currentLatitude === "" ||
+      simulationInput.currentLongitude === "" ||
+      simulationInput.speed === ""
+    ) {
+      setErrorMessage("Latitude, longitude, and speed are required.");
+      return;
+    }
+
     try {
-      await trackingApi.simulateNextPoint(shipmentId, simulationInput);
+      await trackingApi.simulateNextPoint(shipmentId, {
+        currentLatitude: Number(simulationInput.currentLatitude),
+        currentLongitude: Number(simulationInput.currentLongitude),
+        speed: Number(simulationInput.speed),
+      });
       await loadShipmentDetails();
     } catch {
       setErrorMessage("Failed to simulate next tracking point.");
+    }
+  };
+
+  const handleSimulationSessionInputChange = (event) => {
+    const { name, value } = event.target;
+
+    setSimulationSessionInput((previousValue) => ({
+      ...previousValue,
+      [name]: value,
+    }));
+  };
+
+  const handleStartSimulationSession = async (event) => {
+    event.preventDefault();
+
+    try {
+      setIsSimulationActionRunning(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      await simulationApi.startSession(shipmentId, {
+        intervalSeconds: Number(simulationSessionInput.intervalSeconds),
+        speed: Number(simulationSessionInput.speed),
+        conditionStatus: simulationSessionInput.conditionStatus || null,
+        maxEvents: simulationSessionInput.maxEvents
+          ? Number(simulationSessionInput.maxEvents)
+          : null,
+      });
+      setSuccessMessage("Simulation session started.");
+      await loadShipmentDetails();
+    } catch (error) {
+      setErrorMessage(
+        error.response?.data?.message || "Failed to start simulation session.",
+      );
+    } finally {
+      setIsSimulationActionRunning(false);
+    }
+  };
+
+  const handlePauseSimulationSession = async () => {
+    await runSimulationSessionAction(
+      () => simulationApi.pauseSession(simulationSession.id),
+      "Simulation session paused.",
+      "Failed to pause simulation session.",
+    );
+  };
+
+  const handleResumeSimulationSession = async () => {
+    await runSimulationSessionAction(
+      () => simulationApi.resumeSession(simulationSession.id),
+      "Simulation session resumed.",
+      "Failed to resume simulation session.",
+    );
+  };
+
+  const handleStopSimulationSession = async () => {
+    await runSimulationSessionAction(
+      () => simulationApi.stopSession(simulationSession.id),
+      "Simulation session stopped.",
+      "Failed to stop simulation session.",
+    );
+  };
+
+  const runSimulationSessionAction = async (
+    action,
+    successText,
+    failureText,
+  ) => {
+    if (!simulationSession?.id) {
+      return;
+    }
+
+    try {
+      setIsSimulationActionRunning(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      await action();
+      setSuccessMessage(successText);
+      await loadShipmentDetails();
+    } catch (error) {
+      setErrorMessage(error.response?.data?.message || failureText);
+    } finally {
+      setIsSimulationActionRunning(false);
     }
   };
 
@@ -148,7 +306,7 @@ function ShipmentDetailsPage() {
   }
 
   const canConfirmReceipt =
-    receiptConfirmationRoles.includes(currentUser?.role) &&
+    receiptConfirmationRoles.includes(currentUserRole) &&
     !shipment.receiptConfirmedAt &&
     ["ARRIVED", "DELIVERED"].includes(shipment.status);
 
@@ -162,12 +320,13 @@ function ShipmentDetailsPage() {
           </p>
         </div>
 
-        <button type="button" onClick={loadShipmentDetails}>
+        <button type="button" onClick={() => loadShipmentDetails()}>
           Refresh
         </button>
       </div>
 
       {errorMessage && <p className="error-message">{errorMessage}</p>}
+      {successMessage && <p className="success-message">{successMessage}</p>}
 
       <div className="panel">
         <h3>Live Vehicle Location</h3>
@@ -198,7 +357,7 @@ function ShipmentDetailsPage() {
             </DetailItem>
           </div>
 
-          {["ADMIN", "LOGISTICS_PROVIDER"].includes(currentUser?.role) && (
+          {["ADMIN", "LOGISTICS_PROVIDER"].includes(currentUserRole) && (
             <div className="status-action-section">
               <h4>Shipment Workflow Actions</h4>
 
@@ -320,49 +479,70 @@ function ShipmentDetailsPage() {
         </div>
       </div>
 
-      {["ADMIN", "LOGISTICS_PROVIDER"].includes(currentUser?.role) && (
-        <div className="panel">
-          <h3>Simulate IoT Tracking Update</h3>
+      {["ADMIN", "LOGISTICS_PROVIDER"].includes(currentUserRole) && (
+        <>
+          <div className="panel">
+            <h3>Continuous IoT Simulation</h3>
 
-          <div className="form-grid">
-            <label>
-              Current Latitude
-              <input
-                type="number"
-                step="0.0001"
-                name="currentLatitude"
-                value={simulationInput.currentLatitude}
-                onChange={handleSimulationChange}
-              />
-            </label>
-
-            <label>
-              Current Longitude
-              <input
-                type="number"
-                step="0.0001"
-                name="currentLongitude"
-                value={simulationInput.currentLongitude}
-                onChange={handleSimulationChange}
-              />
-            </label>
-
-            <label>
-              Speed
-              <input
-                type="number"
-                step="0.1"
-                name="speed"
-                value={simulationInput.speed}
-                onChange={handleSimulationChange}
-              />
-            </label>
+            <SimulationSessionControls
+              session={simulationSession}
+              options={simulationOptions}
+              formValues={simulationSessionInput}
+              onFormChange={handleSimulationSessionInputChange}
+              onStart={handleStartSimulationSession}
+              onPause={handlePauseSimulationSession}
+              onResume={handleResumeSimulationSession}
+              onStop={handleStopSimulationSession}
+              isBusy={isSimulationActionRunning}
+            />
           </div>
 
-          <button type="button" onClick={handleSimulateNextPoint}>
-            Simulate Next Point
-          </button>
-        </div>
+          <div className="panel">
+            <h3>Manual IoT Tracking Update</h3>
+
+            <div className="form-grid">
+              <label>
+                Current Latitude
+                <input
+                  type="number"
+                  step="0.0001"
+                  name="currentLatitude"
+                  value={simulationInput.currentLatitude}
+                  onChange={handleSimulationChange}
+                  required
+                />
+              </label>
+
+              <label>
+                Current Longitude
+                <input
+                  type="number"
+                  step="0.0001"
+                  name="currentLongitude"
+                  value={simulationInput.currentLongitude}
+                  onChange={handleSimulationChange}
+                  required
+                />
+              </label>
+
+              <label>
+                Speed
+                <input
+                  type="number"
+                  step="0.1"
+                  name="speed"
+                  value={simulationInput.speed}
+                  onChange={handleSimulationChange}
+                  required
+                />
+              </label>
+            </div>
+
+            <button type="button" onClick={handleSimulateNextPoint}>
+              Simulate Next Point
+            </button>
+          </div>
+        </>
       )}
 
       <div className="panel">

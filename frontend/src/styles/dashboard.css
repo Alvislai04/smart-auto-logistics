@@ -1,6 +1,6 @@
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -33,19 +33,13 @@
 .summary-card h2 {
   margin: 10px 0;
   font-size: 34px;
-  letter-spacing: -0.05em;
+  letter-spacing: 0;
 }
 
 .summary-description {
   margin: 0;
   color: var(--color-muted);
   font-size: 13px;
-}
-
-@media (max-width: 1200px) {
-  .summary-grid {
-    grid-template-columns: repeat(3, minmax(160px, 1fr));
-  }
 }
 
 @media (max-width: 760px) {

@@ -133,8 +133,6 @@ public class AlertService {
     }
 
     public List<AlertResponse> getAllOpenAlerts() {
-        evaluateAllActiveShipmentAlerts();
-
         return alertRepository.findByStatusOrderByCreatedAtDesc(AlertStatus.OPEN)
                 .stream()
                 .map(this::mapToResponse)

@@ -47,13 +47,15 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/blockchain-records/shipment/*").authenticated()
                         .requestMatchers("/api/blockchain-records/**").hasRole("ADMIN")
 
-                        .requestMatchers(HttpMethod.POST, "/api/shipments").hasAnyRole("ADMIN", "MANUFACTURER")
+                        .requestMatchers(HttpMethod.POST, "/api/shipments").hasRole("MANUFACTURER")
                         .requestMatchers(HttpMethod.PUT, "/api/shipments/*/status").hasAnyRole("ADMIN", "LOGISTICS_PROVIDER")
                         .requestMatchers(HttpMethod.PUT, "/api/shipments/*/receipt-confirmation").hasAnyRole("ADMIN", "LOGISTICS_PROVIDER", "DEALERSHIP")
                         .requestMatchers(HttpMethod.DELETE, "/api/shipments/**").hasRole("ADMIN")
 
                         .requestMatchers(HttpMethod.POST, "/api/shipments/*/tracking-events").hasAnyRole("ADMIN", "LOGISTICS_PROVIDER")
                         .requestMatchers(HttpMethod.POST, "/api/shipments/*/simulation/**").hasAnyRole("ADMIN", "LOGISTICS_PROVIDER")
+                        .requestMatchers(HttpMethod.GET, "/api/shipments/*/simulation/**").hasAnyRole("ADMIN", "LOGISTICS_PROVIDER")
+                        .requestMatchers("/api/simulation-sessions/**").hasAnyRole("ADMIN", "LOGISTICS_PROVIDER")
 
                         .requestMatchers(HttpMethod.PUT, "/api/alerts/*/acknowledge").hasAnyRole("ADMIN", "LOGISTICS_PROVIDER", "DEALERSHIP")
                         .requestMatchers(HttpMethod.PUT, "/api/alerts/*/resolve").hasAnyRole("ADMIN", "LOGISTICS_PROVIDER")

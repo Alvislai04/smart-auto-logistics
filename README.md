@@ -12,9 +12,22 @@ The project currently includes:
 
 - Spring Boot backend with PostgreSQL persistence
 - React + Vite frontend with role-protected routes
-- JWT login using seeded users
+- Normal email/password login with JWT-protected API access
+- Role-specific dashboard landing after login
+- Authenticated dashboard summaries scoped to the user's operational role
+- Optimized dashboard overview loading through one backend request with grouped
+  database counts
+- Role-scoped shipment, delay, and alert reports
+- CSV export for operational reports
+- Admin-only user account registration and account maintenance
+- Database-backed user role options for account registration
+- Self-service account profile updates and password changes
+- Non-admin company profile data synced into shipment party profiles by
+  `party_profile_key`
 - Supabase PostgreSQL Session Pooler configuration
-- Shipment creation, listing, details, deletion, and workflow status updates
+- Manufacturer shipment creation, listing, details, deletion, and workflow
+  status updates
+- Shipment creation route/API restricted to the manufacturer role
 - Auto-generated unique shipment codes controlled by the backend
 - Database-backed Mercedes-Benz vehicle model dropdown for shipment creation
 - Database-backed manufacturer origin and dealership destination dropdowns using
@@ -25,6 +38,8 @@ The project currently includes:
 - Planned route coordinates for route deviation and progress monitoring
 - Delivery receipt confirmation with audit/blockchain event recording
 - Simulated IoT tracking updates with GPS, speed, and condition status
+- Database-backed continuous IoT simulation sessions with start, pause, resume,
+  stop, interval control, and multi-shipment monitoring
 - Leaflet map visualization with route history and planned route markers
 - Advanced alert rules for delay, idle, ETA overdue, missing tracking updates,
   route deviation, sensor warning, and progress shortfall
@@ -98,6 +113,8 @@ $env:DB_USERNAME="postgres.xgvsmuqdyhzommukmaic"
 $env:DB_PASSWORD="your-supabase-database-password"
 $env:JWT_SECRET="replace-with-a-long-random-secret"
 $env:JWT_EXPIRATION_MS="86400000"
+$env:SIMULATION_SCHEDULER_ENABLED="true"
+$env:SIMULATION_SCHEDULER_DELAY_MS="5000"
 ```
 
 Required blockchain variables after deploying the local contract:
@@ -131,13 +148,13 @@ Recommended setup:
 6. Start the backend with Supabase database environment variables.
 
 Rerun `database/supabase-schema.sql` whenever this project adds database fields.
-The script uses `if not exists` checks and seed-user upserts so existing
+The script uses `if not exists` checks and master-data upserts so existing
 Supabase projects can receive the latest columns, indexes, and profile data.
 
 For the shipment dropdown master-data change only, run:
 
 ```text
-database/migrations/2026-08-07-shipment-master-data.sql
+database/migrations/2026-08-08-shipment-dropdown-master-data.sql
 ```
 
 This creates and fills:
@@ -148,6 +165,36 @@ This creates and fills:
 The application reads create-shipment dropdown data from those tables. Do not
 hardcode vehicle model names, manufacturer origins, or dealership destinations in
 JavaScript or Java.
+
+For the user account management change only, run:
+
+```text
+database/migrations/2026-08-08-user-account-management.sql
+```
+
+This creates and fills `user_role_options`, adds `party_profile_key` to
+`app_users`, and allows manufacturer, logistics provider, and dealership account
+profiles to sync into `shipment_party_profiles`.
+
+For the normal login process readiness change only, run:
+
+```text
+database/migrations/2026-08-08-login-production-readiness.sql
+```
+
+Before running the first-admin block inside that file, replace the
+`REPLACE_WITH_*` values with your own admin name, email, and strong password. If
+your Supabase database already has an active admin account, the first-admin block
+can be skipped.
+
+For the continuous IoT simulation session change only, run:
+
+```text
+database/migrations/2026-08-09-continuous-simulation-sessions.sql
+```
+
+This creates `simulation_sessions`, which stores active, paused, stopped, and
+completed simulator sessions for shipment tracking.
 
 Direct connection JDBC example:
 
@@ -234,20 +281,91 @@ Frontend URL:
 http://localhost:5173
 ```
 
-## Seeded Login Accounts
+## Login Accounts
+
+Users sign in with real accounts stored in the `app_users` table. The login page
+does not contain demo credentials, role shortcuts, or hardcoded account data.
+
+For a new database, create the first admin account by either:
+
+- Running `database/migrations/2026-08-08-login-production-readiness.sql` after
+  replacing the first-admin values
+- Setting `APP_BOOTSTRAP_ADMIN_ENABLED=true` with
+  `APP_BOOTSTRAP_ADMIN_FULL_NAME`, `APP_BOOTSTRAP_ADMIN_EMAIL`, and
+  `APP_BOOTSTRAP_ADMIN_PASSWORD`
+
+After the first admin can sign in, create manufacturer, logistics provider, and
+dealership accounts from `Admin > User Accounts`.
+
+Passwords are stored as BCrypt hashes, so the system cannot show the original
+plaintext password later. For accounts created from `Admin > User Accounts`, the
+password is the temporary password the admin typed during registration. If your
+Supabase database still contains old seeded accounts from earlier development
+and you never changed them, those old defaults were:
+
+| Email | Old default password |
+| --- | --- |
+| `admin@autologistics.com` | `Admin@12345` |
+| `manufacturer@autologistics.com` | `Manufacturer@12345` |
+| `logistics@autologistics.com` | `Logistics@12345` |
+| `dealer@autologistics.com` | `Dealer@12345` |
+
+To set a new password for any account, run:
+
+```text
+database/migrations/2026-08-08-account-password-reset-template.sql
+```
+
+Replace `REPLACE_WITH_ACCOUNT_EMAIL` and
+`REPLACE_WITH_NEW_STRONG_PASSWORD` before running it in Supabase.
+
+## Full System Test Data
+
+To populate Supabase with realistic test data for every major app section, run:
+
+```text
+database/testing/full-system-test-data.sql
+```
+
+Then run the verification query file:
+
+```text
+database/testing/full-system-test-verification.sql
+```
+
+The test-data script inserts data for:
+
+- Login accounts for admin, manufacturer, logistics provider, and dealership
+- User account management
+- Shipment dropdown master data
+- Shipment list, detail, tracking, status, and receipt workflows
+- Continuous IoT simulation sessions
+- Dashboard counts
+- Reports and CSV export
+- Alerts
+- Blockchain monitor records
+- Admin notifications
+- Company notifications
+- Integrity cases
+
+Test login accounts created by the script:
 
 | Role | Email | Password |
 | --- | --- | --- |
-| Admin | `admin@autologistics.com` | `Admin@12345` |
-| Manufacturer | `manufacturer@autologistics.com` | `Manufacturer@12345` |
-| Logistics Provider | `logistics@autologistics.com` | `Logistics@12345` |
-| Dealership | `dealer@autologistics.com` | `Dealer@12345` |
-| Dealership | `dealer-selangor@autologistics.com` | `Dealer@12345` |
-| Dealership | `dealer-penang@autologistics.com` | `Dealer@12345` |
+| Admin | `admin@autologistics.test` | `Test@12345` |
+| Manufacturer | `manufacturer@autologistics.test` | `Test@12345` |
+| Logistics Provider | `logistics@autologistics.test` | `Test@12345` |
+| Dealership | `dealer@autologistics.test` | `Test@12345` |
 
-These accounts are seeded by the backend and authenticate through JWT. Shipment
-dropdown master data is stored separately in Supabase tables, not in frontend or
-backend code.
+The script only resets rows created with test keys such as `TST-SHP-%`,
+`TST-%`, `[TEST DATA]%`, and `@autologistics.test`.
+
+To test only the continuous simulation feature after the full test data is
+available, run:
+
+```text
+database/testing/continuous-simulation-test-data.sql
+```
 
 ## Troubleshooting
 
@@ -266,15 +384,15 @@ Open http://localhost:5173/login and sign in again.
 ```
 
 If the browser is still stuck on an old session, use the app logout button or
-clear local storage for `localhost:5173`, then sign in again with one of the
-seeded accounts above.
+clear local storage for `localhost:5173`, then sign in again with an active
+account created by the admin.
 
 ## Main Workflows
 
 ### Shipment Workflow
 
 ```text
-Create shipment with generated shipment code
+Manufacturer creates shipment with generated shipment code
 -> Select Mercedes-Benz model
 -> Select registered manufacturer origin
 -> Select registered dealership destination
@@ -285,6 +403,28 @@ Create shipment with generated shipment code
 -> Mark arrived
 -> Confirm delivery receipt
 -> Shipment becomes delivered
+```
+
+### Continuous IoT Simulation Workflow
+
+```text
+Admin or logistics provider opens Simulation
+-> Start a shipment simulation session from shipment details
+-> Backend scheduler generates tracking events by interval
+-> Map, tracking history, alerts, and session counters update
+-> Pause, resume, or stop the session
+-> Session completes when destination or max event limit is reached
+```
+
+### Account Management Workflow
+
+```text
+Admin opens User Accounts
+-> Select role from database-backed role options
+-> Register user with company and location details
+-> Non-admin profile syncs to shipment party profile records
+-> User opens My Account
+-> User updates own profile or changes password
 ```
 
 ### Blockchain Integrity Workflow
@@ -322,7 +462,7 @@ Targeted frontend lint:
 
 ```powershell
 cd frontend
-.\node_modules\.bin\eslint.cmd src\pages\AlertsPage.jsx src\pages\ShipmentDetailsPage.jsx src\components\map\ShipmentMap.jsx
+.\node_modules\.bin\eslint.cmd src\pages\SimulationSessionsPage.jsx src\pages\ShipmentDetailsPage.jsx src\components\simulation\SimulationSessionControls.jsx src\api\simulationApi.js
 ```
 
 Smart contract compile and test:
@@ -342,22 +482,18 @@ npm audit --omit=dev
 
 ## Recent Implementation Update
 
-The latest completed step improved shipment creation data integrity:
+The latest completed step added continuous IoT simulation sessions:
 
-- Backend now generates unique shipment codes after the shipment database ID is
-  assigned
-- Create shipment no longer accepts editable shipment-code, origin,
-  destination, dealership, or route-coordinate text from the user
-- Added database-backed `vehicle_models` and `shipment_party_profiles` master
-  tables
-- Shipment options API now reads Mercedes-Benz models, manufacturer origins, and
-  dealership destinations from Supabase by unique keys
-- Updated the Supabase schema script with master-data tables, shipment party
-  keys, vehicle model codes, and unique shipment-code indexing
-- Updated the create shipment UI with read-only generated/derived fields and
-  dropdown-driven route selection
+- Added `simulation_sessions` database table and Supabase migration
+- Added backend session APIs for start, pause, resume, stop, list, and options
+- Added a Spring scheduler that generates tracking events for active sessions
+- Added route-aware movement toward shipment destinations
+- Added a Simulation page for admin/logistics multi-shipment monitoring
+- Added continuous simulation controls to shipment details
+- Added focused simulation test data and verification coverage
 
 ## Known Remaining Work
 
 See [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md) for the full checklist. The next
-recommended implementation area is reporting pages and CSV export.
+recommended implementation area is report PDF export and retry handling for
+failed blockchain records.

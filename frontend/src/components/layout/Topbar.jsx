@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 
 function Topbar() {
@@ -22,6 +22,10 @@ function Topbar() {
           <strong>{currentUser?.name}</strong>
           <span>{currentUser?.role?.replaceAll("_", " ")}</span>
         </div>
+
+        <Link className="button-link secondary-button" to="/account">
+          Account
+        </Link>
 
         <button type="button" onClick={handleLogout}>
           Logout

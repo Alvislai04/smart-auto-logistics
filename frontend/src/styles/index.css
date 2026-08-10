@@ -6,6 +6,9 @@
 @import "./dashboard.css";
 @import "./shipments.css";
 @import "./alerts.css";
+@import "./accounts.css";
+@import "./reports.css";
+@import "./simulation.css";
 @import "./map.css";
 @import "./blockchain.css";
 @import "./notifications.css";

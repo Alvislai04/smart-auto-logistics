@@ -11,6 +11,8 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Locale;
+
 @Service
 public class AuthService {
 
@@ -33,17 +35,19 @@ public class AuthService {
 
     @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request) {
+        String normalizedEmail = request.getEmail().trim().toLowerCase(Locale.ROOT);
+
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                        request.getEmail(),
+                        normalizedEmail,
                         request.getPassword()
                 )
         );
 
-        UserDetails userDetails = customUserDetailsService.loadUserByUsername(request.getEmail());
+        UserDetails userDetails = customUserDetailsService.loadUserByUsername(normalizedEmail);
         String token = jwtService.generateToken(userDetails);
 
-        AppUser appUser = appUserRepository.findByEmail(request.getEmail())
+        AppUser appUser = appUserRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseThrow(() -> new BadRequestException("Invalid email or password."));
 
         return new LoginResponse(
@@ -51,7 +55,12 @@ public class AuthService {
                 appUser.getId(),
                 appUser.getFullName(),
                 appUser.getEmail(),
-                appUser.getRole()
+                appUser.getRole(),
+                appUser.getCompanyName(),
+                appUser.getOperatingLocation(),
+                appUser.getLocationLatitude(),
+                appUser.getLocationLongitude(),
+                appUser.getPartyProfileKey()
         );
     }
 }
