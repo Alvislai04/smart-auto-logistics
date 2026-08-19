@@ -84,32 +84,10 @@ The project currently includes:
 The project progress checklist is maintained in
 [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md).
 
-The code-derived UML documentation for Administrator, Manufacturer, Logistics
-Provider, and Dealership roles is maintained in
-[docs/ROLE_CLASS_DIAGRAM.md](docs/ROLE_CLASS_DIAGRAM.md).
-
-The detailed, report-ready Administrator class diagram is available as
-[documentation](docs/diagrams/ADMINISTRATOR_CLASS_DIAGRAM.md) and a
-[high-resolution PNG](docs/diagrams/ADMINISTRATOR_CLASS_DIAGRAM.png). The native
-editable version is available as a
-[draw.io document](docs/diagrams/ADMINISTRATOR_CLASS_DIAGRAM.drawio).
-
-The corresponding Manufacturer module diagram is available as
-[documentation](docs/diagrams/MANUFACTURER_CLASS_DIAGRAM.md), a
-[high-resolution PNG](docs/diagrams/MANUFACTURER_CLASS_DIAGRAM.png), and a
-native editable
-[draw.io document](docs/diagrams/MANUFACTURER_CLASS_DIAGRAM.drawio).
-
-The Logistics Provider module diagram is available as
-[documentation](docs/diagrams/LOGISTICS_PROVIDER_CLASS_DIAGRAM.md), a
-[high-resolution PNG](docs/diagrams/LOGISTICS_PROVIDER_CLASS_DIAGRAM.png), and a
-native editable
-[draw.io document](docs/diagrams/LOGISTICS_PROVIDER_CLASS_DIAGRAM.drawio).
-
-The Dealership module diagram is available as
-[documentation](docs/diagrams/DEALERSHIP_CLASS_DIAGRAM.md), a
-[high-resolution PNG](docs/diagrams/DEALERSHIP_CLASS_DIAGRAM.png), and a native
-editable [draw.io document](docs/diagrams/DEALERSHIP_CLASS_DIAGRAM.drawio).
+For a fresh clone, follow the complete
+[clone, install, and run guide](docs/SETUP_AND_RUN_GUIDE.md). It covers local
+development, Docker/Nginx, Supabase, first-admin bootstrap, the optional local
+blockchain, automated checks, and common startup errors.
 
 ## Project Structure
 
@@ -137,7 +115,6 @@ smart-auto-logistics/
 |   +-- hardhat.config.js
 +-- database/
 |   +-- migrations/
-|   +-- testing/
 +-- frontend/
 |   +-- Dockerfile
 |   +-- nginx/default.conf
@@ -153,24 +130,7 @@ smart-auto-logistics/
 |   +-- compose.production.yml
 |   +-- .env.production.example
 +-- docs/
-|   +-- ROLE_CLASS_DIAGRAM.md
-|   +-- diagrams/
-|       +-- ADMINISTRATOR_CLASS_DIAGRAM.drawio
-|       +-- ADMINISTRATOR_CLASS_DIAGRAM.html
-|       +-- ADMINISTRATOR_CLASS_DIAGRAM.md
-|       +-- ADMINISTRATOR_CLASS_DIAGRAM.png
-|       +-- MANUFACTURER_CLASS_DIAGRAM.drawio
-|       +-- MANUFACTURER_CLASS_DIAGRAM.html
-|       +-- MANUFACTURER_CLASS_DIAGRAM.md
-|       +-- MANUFACTURER_CLASS_DIAGRAM.png
-|       +-- LOGISTICS_PROVIDER_CLASS_DIAGRAM.drawio
-|       +-- LOGISTICS_PROVIDER_CLASS_DIAGRAM.html
-|       +-- LOGISTICS_PROVIDER_CLASS_DIAGRAM.md
-|       +-- LOGISTICS_PROVIDER_CLASS_DIAGRAM.png
-|       +-- DEALERSHIP_CLASS_DIAGRAM.drawio
-|       +-- DEALERSHIP_CLASS_DIAGRAM.html
-|       +-- DEALERSHIP_CLASS_DIAGRAM.md
-|       +-- DEALERSHIP_CLASS_DIAGRAM.png
+|   +-- SETUP_AND_RUN_GUIDE.md
 +-- README.md
 +-- PROJECT_PROGRESS.md
 ```
@@ -188,136 +148,30 @@ smart-auto-logistics/
 
 ## Environment Configuration
 
-Copy `.env.example` values into your local shell or local `.env` workflow. Do
-not commit real secrets.
+Copy `.env.example` to `.env` for the backend and
+`frontend/.env.example` to `frontend/.env.local` for Vite. Both destination
+files are ignored by Git. Do not commit database passwords, JWT secrets,
+blockchain private keys, or first-admin credentials.
 
-Required backend variables:
-
-```powershell
-$env:DB_URL="jdbc:postgresql://aws-0-ap-northeast-1.pooler.supabase.com:5432/postgres?sslmode=require"
-$env:DB_USERNAME="postgres.xgvsmuqdyhzommukmaic"
-$env:DB_PASSWORD="your-supabase-database-password"
-$env:JWT_SECRET="replace-with-a-long-random-secret"
-$env:JWT_EXPIRATION_MS="86400000"
-$env:SIMULATION_SCHEDULER_ENABLED="true"
-$env:SIMULATION_SCHEDULER_DELAY_MS="5000"
-$env:SIMULATION_DEFAULT_INTERVAL_SECONDS="15"
-$env:SIMULATION_DEFAULT_MAX_EVENTS="500"
-```
-
-Required blockchain variables after deploying the local contract:
-
-```powershell
-$env:BLOCKCHAIN_ENABLED="true"
-$env:BLOCKCHAIN_RPC_URL="http://127.0.0.1:8545"
-$env:BLOCKCHAIN_CONTRACT_ADDRESS="paste-contract-address-from-deployment.local.json"
-$env:BLOCKCHAIN_PRIVATE_KEY="paste-local-hardhat-private-key"
-```
-
-Frontend API variable:
-
-```powershell
-$env:VITE_API_BASE_URL="http://localhost:8080/api"
-$env:VITE_DASHBOARD_REFRESH_MS="15000"
-$env:VITE_ALERT_BADGE_REFRESH_MS="15000"
-```
+The exact variables and safe secret-generation command are documented in the
+[setup guide](docs/SETUP_AND_RUN_GUIDE.md#5-configure-local-development).
 
 ## Supabase PostgreSQL Setup
 
 Supabase changes are stored as incremental SQL files in `database/migrations/`.
-Run the needed migration in Supabase SQL Editor after the base tables exist.
+This checkout assumes the application base schema already exists. A completely
+empty Supabase project first needs a schema-only export from the existing
+project.
 
 Recommended setup:
 
 1. Create a Supabase project.
 2. Open `SQL Editor`.
-3. Run your existing/base application schema if the database is empty.
-4. Run the latest migration files from `database/migrations/`.
+3. Import the current application schema if the database is empty.
+4. Apply migrations that have not already been run, in filename order.
 5. Open the Supabase `Connect` panel and copy either the Direct Connection or
    Session Pooler connection details.
 6. Start or restart the backend with Supabase database environment variables.
-
-For the shipment dropdown master-data change, run:
-
-```text
-database/migrations/2026-08-08-shipment-dropdown-master-data.sql
-```
-
-This creates and fills:
-
-- `vehicle_models`, keyed by `model_code`
-- `shipment_party_profiles`, keyed by `party_key`
-
-The application reads create-shipment dropdown data from those tables. Do not
-hardcode vehicle model names, manufacturer origins, or dealership destinations in
-JavaScript or Java.
-
-For the user account management change, run:
-
-```text
-database/migrations/2026-08-08-user-account-management.sql
-```
-
-This creates and fills `user_role_options`, adds `party_profile_key` to
-`app_users`, and allows manufacturer, logistics provider, and dealership account
-profiles to sync into `shipment_party_profiles`.
-
-For the normal login process readiness change, run:
-
-```text
-database/migrations/2026-08-08-login-production-readiness.sql
-```
-
-Before running the first-admin block inside that file, replace the
-`REPLACE_WITH_*` values with your own admin name, email, and strong password. If
-your Supabase database already has an active admin account, the first-admin block
-can be skipped.
-
-For the automatic system-managed simulation change, run:
-
-```text
-database/migrations/2026-08-12-system-managed-simulation.sql
-```
-
-This creates and fills:
-
-- `simulation_profiles`, keyed by `profile_key`
-- `simulation_sessions`, one active system-owned session per eligible shipment
-
-The backend reads random behavior from `simulation_profiles`. Users cannot start
-or stop simulations from the UI; the scheduler provisions and advances sessions
-automatically.
-
-For the shipment detail editing audit event change, run:
-
-```text
-database/migrations/2026-08-13-edit-shipment-details.sql
-```
-
-This creates a unique index for `shipments.shipment_code` and updates the
-`shipment_events` event type constraint so edited shipment details can be saved
-as `SHIPMENT_UPDATED` audit events. Run this before testing the edit form in
-Supabase.
-
-For the shipment event actor/source audit trail change, run:
-
-```text
-database/migrations/2026-08-13-shipment-event-actor-source.sql
-```
-
-This adds actor snapshot fields, event source type, and event payload version to
-`shipment_events`. Existing rows are backfilled as `LEGACY_RECORD` with payload
-version `1`, so old blockchain hashes can still be verified with their original
-payload format while new events use version `2`.
-
-The dashboard real-time refresh change does not require a Supabase SQL query. It
-uses the existing optimized `/api/dashboard/overview` endpoint and the frontend
-`VITE_DASHBOARD_REFRESH_MS` setting.
-
-The alert badge, toast feedback, and manufacturer alert-page access change does
-not require a Supabase SQL query. It uses the existing `alerts`, `shipments`,
-and account `party_profile_key` data, plus the frontend
-`VITE_ALERT_BADGE_REFRESH_MS` setting.
 
 For blockchain retry attempt tracking, run:
 
@@ -394,69 +248,11 @@ removed in favor of this centralized configuration.
 
 ## Local Setup
 
-### 1. Database
-
-Create or update the tables in Supabase by running the needed SQL files from
-`database/migrations/` in the Supabase SQL Editor.
-
-The backend reads database settings from the root `.env` file when it is run
-from the `backend` folder. Keep your real Supabase password only in `.env`.
-
-### 2. Blockchain
-
-Install dependencies:
-
-```powershell
-cd C:\Users\alvis\Desktop\smart-auto-logistics\blockchain
-npm install
-```
-
-Start the local blockchain node:
-
-```powershell
-npm run node
-```
-
-In a second terminal, deploy the ledger contract:
-
-```powershell
-cd C:\Users\alvis\Desktop\smart-auto-logistics\blockchain
-npm run deploy:local
-```
-
-Copy `contractAddress` from `blockchain/deployment.local.json` into
-`BLOCKCHAIN_CONTRACT_ADDRESS`.
-
-### 3. Backend
-
-Run the Spring Boot backend:
-
-```powershell
-cd C:\Users\alvis\Desktop\smart-auto-logistics\backend
-.\mvnw.cmd spring-boot:run
-```
-
-Backend URL:
-
-```text
-http://localhost:8080
-```
-
-### 4. Frontend
-
-Run the React frontend:
-
-```powershell
-cd C:\Users\alvis\Desktop\smart-auto-logistics\frontend
-npm install
-npm run dev
-```
-
-Frontend URL:
-
-```text
-http://localhost:5173
-```
+Use the [clone, install, and run guide](docs/SETUP_AND_RUN_GUIDE.md) for the
+complete portable procedure. In summary, configure the ignored environment
+files, run `npm ci` in `frontend`, run `.\mvnw.cmd spring-boot:run` from
+`backend`, and run `npm run dev` from `frontend`. Blockchain dependencies and
+processes are optional.
 
 ## Login Accounts
 
@@ -464,100 +260,27 @@ Users sign in with real accounts stored in the `app_users` table. The redesigned
 login page does not contain demo credentials, role shortcuts, or hardcoded
 account data.
 
-For a new database, create the first admin account by either:
-
-- Running `database/migrations/2026-08-08-login-production-readiness.sql` after
-  replacing the first-admin values
-- Setting `APP_BOOTSTRAP_ADMIN_ENABLED=true` with
-  `APP_BOOTSTRAP_ADMIN_FULL_NAME`, `APP_BOOTSTRAP_ADMIN_EMAIL`, and
-  `APP_BOOTSTRAP_ADMIN_PASSWORD`
+For a database without a working administrator, temporarily set
+`APP_BOOTSTRAP_ADMIN_ENABLED=true` with `APP_BOOTSTRAP_ADMIN_FULL_NAME`,
+`APP_BOOTSTRAP_ADMIN_EMAIL`, and `APP_BOOTSTRAP_ADMIN_PASSWORD`. Disable and
+clear the bootstrap values immediately after the account is created.
 
 After the first admin can sign in, create manufacturer, logistics provider, and
 dealership accounts from `Admin > User Accounts`.
 
-Passwords are stored as BCrypt hashes, so the system cannot show the original
-plaintext password later. For accounts created from `Admin > User Accounts`, the
-password is the temporary password the admin typed during registration. If your
-Supabase database still contains old seeded accounts from earlier development
-and you never changed them, those old defaults were:
-
-| Email | Old default password |
-| --- | --- |
-| `admin@autologistics.com` | `Admin@12345` |
-| `manufacturer@autologistics.com` | `Manufacturer@12345` |
-| `logistics@autologistics.com` | `Logistics@12345` |
-| `dealer@autologistics.com` | `Dealer@12345` |
-
-To set a new password for any account, run:
-
-```text
-database/migrations/2026-08-08-account-password-reset-template.sql
-```
-
-Replace `REPLACE_WITH_ACCOUNT_EMAIL` and
-`REPLACE_WITH_NEW_STRONG_PASSWORD` before running it in Supabase.
-
-## Simulation Test Data
-
-To test the automatic simulation feature with real rows, run:
-
-```text
-database/testing/system-managed-simulation-test-data.sql
-```
-
-This inserts three Mercedes-Benz shipment records with real Malaysia route
-coordinates and active system-owned sessions. After the backend scheduler runs,
-the `/simulation` page and shipment details should show changing tracking
-events, speed, condition, alerts, and route positions.
-
-## Admin Master Data Test Data
-
-To test the admin Master Data page with real dropdown and simulation profile
-records, run:
-
-```text
-database/testing/admin-master-data-test-data.sql
-```
-
-This upserts role options, Mercedes-Benz vehicle models, manufacturer,
-logistics provider, dealership party profiles, and weighted simulation
-profiles. After running it, sign in as an admin and open `/admin/master-data`.
-
-## Edit Shipment Test Data
-
-To test the edit shipment details feature with real rows, run:
-
-```text
-database/testing/edit-shipment-details-test-data.sql
-```
-
-This upserts one editable `CREATED` shipment, one Mercedes-Benz vehicle model,
-one manufacturer profile, one dealership profile, and a paused system simulation
-session so the shipment remains safe for edit testing. The file also includes a
-commented optional update block to link one manufacturer account to the test
-manufacturer profile.
-
-## Audit Trail Actor/Source Test Data
-
-To test actor and source labels in the shipment event timeline, run:
-
-```text
-database/testing/shipment-event-actor-source-test-data.sql
-```
-
-This inserts one `USER_ACTION`, one `IOT_SIMULATION`, and one `ALERT_ENGINE`
-event against shipment `EDIT-SHP-READY-001`. Open that shipment details page and
-check the event timeline badges and actor/source labels.
+Passwords are stored as BCrypt hashes, so the original plaintext password
+cannot be displayed later. Accounts created from **Admin > User Accounts** use
+the temporary password entered by the administrator, and each user can change
+their own password from **My Account**.
 
 ## Troubleshooting
 
 ### No Active Sessions on `/simulation`
 
-Run `database/migrations/2026-08-12-system-managed-simulation.sql` in Supabase,
+Confirm that the database contains the simulation profile/session schema,
 restart the backend, and wait one scheduler cycle. Eligible shipments must have
 status `CREATED`, `READY_FOR_DISPATCH`, `PICKED_UP`, `IN_TRANSIT`, or `DELAYED`
-and complete origin/destination coordinates. To create ready-to-watch test
-rows, run `database/testing/system-managed-simulation-test-data.sql`.
+and complete origin/destination coordinates.
 
 ### Expired JWT in Browser Storage
 
@@ -685,20 +408,6 @@ Production dependency audit for blockchain workspace:
 cd blockchain
 npm audit --omit=dev
 ```
-
-Read-only production health baseline:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File `
-  .\testing\performance\health-load.ps1 `
-  -BaseUrl http://127.0.0.1:8089 `
-  -RequestCount 50
-```
-
-Manual acceptance testing is tracked in
-[`testing/UAT_CHECKLIST.md`](testing/UAT_CHECKLIST.md). The dated automated
-evidence is in
-[`testing/TEST_REPORT_2026-08-18.md`](testing/TEST_REPORT_2026-08-18.md).
 
 ## Recent Implementation Update
 

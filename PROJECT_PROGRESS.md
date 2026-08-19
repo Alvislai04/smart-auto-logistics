@@ -621,3 +621,26 @@ Completion date: 2026-08-19.
   class diagram
 - [x] Added a native editable `.drawio` version of the Dealership class diagram
   with validated mxGraph structure
+
+## 21. Clone And Runtime Onboarding
+
+Completion date: 2026-08-20.
+
+- [x] Added `docs/SETUP_AND_RUN_GUIDE.md` as the authoritative fresh-clone guide
+- [x] Documented Java 21, Node.js 22, Git, Docker, and Supabase prerequisites
+- [x] Documented reproducible frontend and optional blockchain installation
+  with `npm ci`
+- [x] Documented local Spring Boot and Vite startup, URLs, and health checks
+- [x] Documented optional Hardhat node, contract deployment, and backend setup
+- [x] Documented production-like Docker/Nginx build, startup, logs, and shutdown
+- [x] Added `frontend/.env.example` and explained Vite environment-file scope
+- [x] Replaced project-specific Supabase identifiers in committed examples
+- [x] Disabled blockchain by default until a real node and contract are ready
+- [x] Removed the fixed Docker JWT secret and made `JWT_SECRET` mandatory
+- [x] Added optional first-administrator bootstrap variables to Docker Compose
+- [x] Removed stale README references to missing setup migrations and test data
+- [x] Added smoke-test, automated-test, and common-error troubleshooting steps
+- [x] Docker Compose configuration validation passed
+- [x] Backend tests passed: 30 tests, 0 failures
+- [x] Frontend checks passed: ESLint, 7 component tests, and production build
+- [x] Hardhat Solidity tests passed: 2 tests, 0 failures
