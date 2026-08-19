@@ -37,6 +37,11 @@ public class BlockchainRecord {
     @Column(length = 1000)
     private String verificationMessage;
 
+    @Column
+    private Integer retryCount = 0;
+
+    private LocalDateTime lastRetryAt;
+
     public BlockchainRecord() {
     }
 
@@ -49,6 +54,11 @@ public class BlockchainRecord {
         if (this.status == null) {
             this.status = BlockchainRecordStatus.PENDING;
         }
+
+        if (this.retryCount == null) {
+            this.retryCount = 0;
+        }
+
     }
 
     public Long getId() {
@@ -122,4 +132,21 @@ public class BlockchainRecord {
     public void setVerificationMessage(String verificationMessage) {
         this.verificationMessage = verificationMessage;
     }
+
+    public Integer getRetryCount() {
+        return retryCount;
+    }
+
+    public void setRetryCount(Integer retryCount) {
+        this.retryCount = retryCount;
+    }
+
+    public LocalDateTime getLastRetryAt() {
+        return lastRetryAt;
+    }
+
+    public void setLastRetryAt(LocalDateTime lastRetryAt) {
+        this.lastRetryAt = lastRetryAt;
+    }
+
 }

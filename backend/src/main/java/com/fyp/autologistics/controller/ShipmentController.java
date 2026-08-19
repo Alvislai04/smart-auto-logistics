@@ -4,15 +4,16 @@ import com.fyp.autologistics.dto.ConfirmDeliveryReceiptRequest;
 import com.fyp.autologistics.dto.CreateShipmentRequest;
 import com.fyp.autologistics.dto.ShipmentPageResponse;
 import com.fyp.autologistics.dto.ShipmentResponse;
+import com.fyp.autologistics.dto.UpdateShipmentRequest;
 import com.fyp.autologistics.enums.LogisticsStage;
 import com.fyp.autologistics.enums.ShipmentStatus;
 import com.fyp.autologistics.service.ShipmentService;
 import jakarta.validation.Valid;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/shipments")
-@CrossOrigin(origins = "http://localhost:5173")
 public class ShipmentController {
 
     private final ShipmentService shipmentService;
@@ -22,8 +23,11 @@ public class ShipmentController {
     }
 
     @PostMapping
-    public ShipmentResponse createShipment(@Valid @RequestBody CreateShipmentRequest request) {
-        return shipmentService.createShipment(request);
+    public ShipmentResponse createShipment(
+            @Valid @RequestBody CreateShipmentRequest request,
+            Authentication authentication
+    ) {
+        return shipmentService.createShipment(request, authentication.getName());
     }
 
     @GetMapping
@@ -52,20 +56,31 @@ public class ShipmentController {
         return shipmentService.getShipmentById(id);
     }
 
+    @PutMapping("/{id}")
+    public ShipmentResponse updateShipment(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateShipmentRequest request,
+            Authentication authentication
+    ) {
+        return shipmentService.updateShipment(id, request, authentication.getName());
+    }
+
     @PutMapping("/{id}/status")
     public ShipmentResponse updateShipmentStatus(
             @PathVariable Long id,
-            @RequestParam ShipmentStatus status
+            @RequestParam ShipmentStatus status,
+            Authentication authentication
     ) {
-        return shipmentService.updateShipmentStatus(id, status);
+        return shipmentService.updateShipmentStatus(id, status, authentication.getName());
     }
 
     @PutMapping("/{id}/receipt-confirmation")
     public ShipmentResponse confirmDeliveryReceipt(
             @PathVariable Long id,
-            @Valid @RequestBody ConfirmDeliveryReceiptRequest request
+            @Valid @RequestBody ConfirmDeliveryReceiptRequest request,
+            Authentication authentication
     ) {
-        return shipmentService.confirmDeliveryReceipt(id, request);
+        return shipmentService.confirmDeliveryReceipt(id, request, authentication.getName());
     }
 
     @DeleteMapping("/{id}")

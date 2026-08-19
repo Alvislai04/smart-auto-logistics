@@ -1,47 +1,3 @@
-.simulation-control-grid {
-  display: grid;
-  grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.4fr);
-  gap: 20px;
-  align-items: start;
-}
-
-.simulation-session-summary {
-  display: grid;
-  gap: 16px;
-  padding: 18px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-soft);
-}
-
-.simulation-status-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.simulation-form {
-  display: grid;
-  gap: 16px;
-}
-
-.simulation-form-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.simulation-actions,
-.simulation-table-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.simulation-table-actions button {
-  padding: 8px 10px;
-}
-
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -84,21 +40,4 @@
 
 .detail-list.compact .detail-item {
   grid-template-columns: 130px minmax(0, 1fr);
-}
-
-@media (max-width: 980px) {
-  .simulation-control-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 680px) {
-  .simulation-form-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .simulation-actions button,
-  .simulation-table-actions button {
-    width: 100%;
-  }
 }

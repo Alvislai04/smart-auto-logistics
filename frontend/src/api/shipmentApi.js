@@ -16,6 +16,11 @@ export const shipmentApi = {
     return response.data;
   },
 
+  update: async (shipmentId, payload) => {
+    const response = await axiosClient.put(`/shipments/${shipmentId}`, payload);
+    return response.data;
+  },
+
   getFormOptions: async () => {
     const response = await axiosClient.get("/shipment-options");
     return response.data;

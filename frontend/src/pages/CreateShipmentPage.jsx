@@ -1,126 +1,25 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { shipmentApi } from "../api/shipmentApi";
+import { useToast } from "../components/feedback/ToastContext";
 import ShipmentForm from "../components/forms/ShipmentForm";
-
-const emptyFormOptions = {
-  vehicleModels: [],
-  manufacturerOrigins: [],
-  dealershipDestinations: [],
-};
-
-const initialFormData = {
-  vehicleVin: "",
-  vehicleModelKey: "",
-  manufacturerKey: "",
-  dealershipKey: "",
-  origin: "",
-  destination: "",
-  originLatitude: "",
-  originLongitude: "",
-  destinationLatitude: "",
-  destinationLongitude: "",
-  dealershipName: "",
-  estimatedArrival: "",
-  estimatedDeparture: "",
-  currentStage: "MANUFACTURING",
-  stockLocation: "",
-  workInProgressStatus: "NOT_APPLICABLE",
-  responsiblePerson: "",
-  responsibleContact: "",
-  customerName: "",
-  customerContact: "",
-  customerAddress: "",
-  shipmentDocumentReference: "",
-};
-
-function toFormValue(value) {
-  return value == null ? "" : String(value);
-}
-
-function findOptionByKey(options, optionKey) {
-  return options.find((option) => option.key === optionKey);
-}
-
-function hasOptionKey(options, optionKey) {
-  return options.some((option) => option.key === optionKey);
-}
-
-function applyManufacturerSelection(formData, manufacturerKey, formOptions) {
-  const manufacturer = findOptionByKey(
-    formOptions.manufacturerOrigins,
-    manufacturerKey,
-  );
-
-  return {
-    ...formData,
-    manufacturerKey: toFormValue(manufacturerKey),
-    origin: manufacturer?.location ?? "",
-    originLatitude: toFormValue(manufacturer?.latitude),
-    originLongitude: toFormValue(manufacturer?.longitude),
-  };
-}
-
-function applyDealershipSelection(formData, dealershipKey, formOptions) {
-  const dealership = findOptionByKey(
-    formOptions.dealershipDestinations,
-    dealershipKey,
-  );
-
-  return {
-    ...formData,
-    dealershipKey: toFormValue(dealershipKey),
-    dealershipName: dealership?.name ?? "",
-    destination: dealership?.location ?? "",
-    destinationLatitude: toFormValue(dealership?.latitude),
-    destinationLongitude: toFormValue(dealership?.longitude),
-  };
-}
-
-function applyLoadedOptions(formData, formOptions) {
-  const vehicleModelKey = hasOptionKey(
-    formOptions.vehicleModels,
-    formData.vehicleModelKey,
-  )
-    ? formData.vehicleModelKey
-    : "";
-  const manufacturerKey = hasOptionKey(
-    formOptions.manufacturerOrigins,
-    formData.manufacturerKey,
-  )
-    ? formData.manufacturerKey
-    : "";
-  const dealershipKey = hasOptionKey(
-    formOptions.dealershipDestinations,
-    formData.dealershipKey,
-  )
-    ? formData.dealershipKey
-    : "";
-
-  let nextFormData = {
-    ...formData,
-    vehicleModelKey,
-  };
-
-  nextFormData = applyManufacturerSelection(
-    nextFormData,
-    manufacturerKey,
-    formOptions,
-  );
-  nextFormData = applyDealershipSelection(
-    nextFormData,
-    dealershipKey,
-    formOptions,
-  );
-
-  return nextFormData;
-}
+import {
+  applyDealershipSelection,
+  applyLoadedOptions,
+  applyManufacturerSelection,
+  buildShipmentPayload,
+  emptyShipmentFormOptions,
+  initialShipmentFormData,
+  normalizeShipmentFormOptions,
+  validateShipmentForm,
+} from "../utils/shipmentFormUtils";
 
 function CreateShipmentPage() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
-  const [formData, setFormData] = useState(initialFormData);
-  const [formOptions, setFormOptions] = useState(emptyFormOptions);
+  const [formData, setFormData] = useState(initialShipmentFormData);
+  const [formOptions, setFormOptions] = useState(emptyShipmentFormOptions);
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -131,11 +30,7 @@ function CreateShipmentPage() {
       setErrorMessage("");
 
       const options = await shipmentApi.getFormOptions();
-      const normalizedOptions = {
-        vehicleModels: options.vehicleModels ?? [],
-        manufacturerOrigins: options.manufacturerOrigins ?? [],
-        dealershipDestinations: options.dealershipDestinations ?? [],
-      };
+      const normalizedOptions = normalizeShipmentFormOptions(options);
 
       setFormOptions(normalizedOptions);
       setFormData((previousFormData) =>
@@ -145,10 +40,12 @@ function CreateShipmentPage() {
       if (
         normalizedOptions.vehicleModels.length === 0 ||
         normalizedOptions.manufacturerOrigins.length === 0 ||
-        normalizedOptions.dealershipDestinations.length === 0
+        normalizedOptions.dealershipDestinations.length === 0 ||
+        normalizedOptions.logisticsStageOptions.length === 0 ||
+        normalizedOptions.workInProgressStatusOptions.length === 0
       ) {
         setErrorMessage(
-          "Shipment options are incomplete. Please configure manufacturer and dealership profiles.",
+          "Shipment options are incomplete. Please configure shipment master data before creating shipments.",
         );
       }
     } catch (error) {
@@ -161,6 +58,7 @@ function CreateShipmentPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadFormOptions();
   }, [loadFormOptions]);
 
@@ -183,69 +81,11 @@ function CreateShipmentPage() {
     });
   };
 
-  const buildCreateShipmentPayload = () => {
-    const nullableText = (value) => {
-      const trimmedValue = value.trim();
-      return trimmedValue || null;
-    };
-
-    return {
-      manufacturerKey: formData.manufacturerKey,
-      dealershipKey: formData.dealershipKey,
-      vehicleVin: formData.vehicleVin.trim(),
-      vehicleModelKey: formData.vehicleModelKey,
-      estimatedArrival: formData.estimatedArrival,
-      estimatedDeparture: formData.estimatedDeparture,
-      currentStage: formData.currentStage,
-      stockLocation: formData.stockLocation.trim(),
-      workInProgressStatus: formData.workInProgressStatus,
-      responsiblePerson: formData.responsiblePerson.trim(),
-      responsibleContact: formData.responsibleContact.trim(),
-      customerName: formData.customerName.trim(),
-      customerContact: formData.customerContact.trim(),
-      customerAddress: formData.customerAddress.trim(),
-      shipmentDocumentReference: nullableText(
-        formData.shipmentDocumentReference,
-      ),
-    };
-  };
-
   const validateForm = () => {
-    const requiredFields = [
-      "manufacturerKey",
-      "dealershipKey",
-      "vehicleVin",
-      "vehicleModelKey",
-      "estimatedArrival",
-      "estimatedDeparture",
-      "currentStage",
-      "stockLocation",
-      "workInProgressStatus",
-      "responsiblePerson",
-      "responsibleContact",
-      "customerName",
-      "customerContact",
-      "customerAddress",
-    ];
+    const validationMessage = validateShipmentForm(formData);
 
-    const hasEmptyField = requiredFields.some(
-      (fieldName) => !String(formData[fieldName] ?? "").trim(),
-    );
-
-    if (hasEmptyField) {
-      setErrorMessage("Please complete all required fields.");
-      return false;
-    }
-
-    if (!formData.origin || !formData.destination || !formData.dealershipName) {
-      setErrorMessage("Please select a valid manufacturer and dealership.");
-      return false;
-    }
-
-    if (
-      new Date(formData.estimatedArrival) <= new Date(formData.estimatedDeparture)
-    ) {
-      setErrorMessage("Estimated arrival must be after estimated departure.");
+    if (validationMessage) {
+      setErrorMessage(validationMessage);
       return false;
     }
 
@@ -263,14 +103,24 @@ function CreateShipmentPage() {
       setIsSubmitting(true);
       setErrorMessage("");
 
-      const payload = buildCreateShipmentPayload();
+      const payload = buildShipmentPayload(formData);
       const createdShipment = await shipmentApi.create(payload);
 
+      showToast({
+        type: "success",
+        title: "Shipment created",
+        message: `${createdShipment.shipmentCode} is ready for monitoring.`,
+      });
       navigate(`/shipments/${createdShipment.id}`);
     } catch (error) {
-      setErrorMessage(
-        error.response?.data?.message || "Failed to create shipment.",
-      );
+      const message =
+        error.response?.data?.message || "Failed to create shipment.";
+      setErrorMessage(message);
+      showToast({
+        type: "error",
+        title: "Shipment creation failed",
+        message,
+      });
     } finally {
       setIsSubmitting(false);
     }

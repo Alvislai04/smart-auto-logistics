@@ -10,6 +10,8 @@ import java.util.Optional;
 public interface ShipmentPartyProfileRepository
         extends JpaRepository<ShipmentPartyProfile, Long> {
 
+    List<ShipmentPartyProfile> findAllByOrderBySortOrderAscCompanyNameAsc();
+
     List<ShipmentPartyProfile> findByPartyRoleAndActiveTrueOrderBySortOrderAscCompanyNameAsc(
             UserRole partyRole
     );

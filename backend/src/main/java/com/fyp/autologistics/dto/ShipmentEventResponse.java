@@ -1,6 +1,8 @@
 package com.fyp.autologistics.dto;
 
 import com.fyp.autologistics.enums.ShipmentEventType;
+import com.fyp.autologistics.enums.ShipmentEventSourceType;
+import com.fyp.autologistics.enums.UserRole;
 
 import java.time.LocalDateTime;
 
@@ -13,6 +15,12 @@ public class ShipmentEventResponse {
     private String description;
     private String previousStatus;
     private String newStatus;
+    private Long actorUserId;
+    private String actorName;
+    private String actorEmail;
+    private UserRole actorRole;
+    private ShipmentEventSourceType sourceType;
+    private Integer eventPayloadVersion;
     private LocalDateTime createdAt;
 
     public ShipmentEventResponse(
@@ -23,6 +31,12 @@ public class ShipmentEventResponse {
             String description,
             String previousStatus,
             String newStatus,
+            Long actorUserId,
+            String actorName,
+            String actorEmail,
+            UserRole actorRole,
+            ShipmentEventSourceType sourceType,
+            Integer eventPayloadVersion,
             LocalDateTime createdAt
     ) {
         this.id = id;
@@ -32,6 +46,12 @@ public class ShipmentEventResponse {
         this.description = description;
         this.previousStatus = previousStatus;
         this.newStatus = newStatus;
+        this.actorUserId = actorUserId;
+        this.actorName = actorName;
+        this.actorEmail = actorEmail;
+        this.actorRole = actorRole;
+        this.sourceType = sourceType;
+        this.eventPayloadVersion = eventPayloadVersion;
         this.createdAt = createdAt;
     }
 
@@ -61,6 +81,30 @@ public class ShipmentEventResponse {
 
     public String getNewStatus() {
         return newStatus;
+    }
+
+    public Long getActorUserId() {
+        return actorUserId;
+    }
+
+    public String getActorName() {
+        return actorName;
+    }
+
+    public String getActorEmail() {
+        return actorEmail;
+    }
+
+    public UserRole getActorRole() {
+        return actorRole;
+    }
+
+    public ShipmentEventSourceType getSourceType() {
+        return sourceType;
+    }
+
+    public Integer getEventPayloadVersion() {
+        return eventPayloadVersion;
     }
 
     public LocalDateTime getCreatedAt() {

@@ -1,6 +1,7 @@
 package com.fyp.autologistics.blockchain;
 
 import com.fyp.autologistics.config.BlockchainProperties;
+import com.fyp.autologistics.enums.BlockchainHealthStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.web3j.abi.FunctionEncoder;
@@ -15,6 +16,9 @@ import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.DefaultBlockParameterName;
 import org.web3j.protocol.core.methods.request.Transaction;
 import org.web3j.protocol.core.methods.response.EthCall;
+import org.web3j.protocol.core.methods.response.EthBlockNumber;
+import org.web3j.protocol.core.methods.response.EthChainId;
+import org.web3j.protocol.core.methods.response.EthGetCode;
 import org.web3j.protocol.core.methods.response.EthSendTransaction;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
@@ -154,6 +158,191 @@ public class Web3jBlockchainLedgerClient implements BlockchainLedgerClient {
                     exception
             );
         }
+    }
+
+    @Override
+    public BlockchainHealthSnapshot getHealthSnapshot() {
+        boolean enabled = properties.isEnabled();
+        boolean contractConfigured = StringUtils.hasText(properties.getContractAddress());
+        boolean signerConfigured = hasValidSignerConfiguration();
+        String contractAddress = contractConfigured ? properties.getContractAddress() : null;
+
+        if (!enabled) {
+            return new BlockchainHealthSnapshot(
+                    BlockchainHealthStatus.DISABLED,
+                    false,
+                    false,
+                    contractConfigured,
+                    false,
+                    signerConfigured,
+                    contractAddress,
+                    null,
+                    null,
+                    "Blockchain integration is disabled."
+            );
+        }
+
+        if (!StringUtils.hasText(properties.getRpcUrl())) {
+            return new BlockchainHealthSnapshot(
+                    BlockchainHealthStatus.DEGRADED,
+                    true,
+                    false,
+                    contractConfigured,
+                    false,
+                    signerConfigured,
+                    contractAddress,
+                    null,
+                    null,
+                    "Blockchain RPC URL is not configured."
+            );
+        }
+
+        try (Web3j web3j = buildWeb3j()) {
+            EthChainId chainIdResponse = web3j.ethChainId().send();
+            EthBlockNumber blockNumberResponse = web3j.ethBlockNumber().send();
+
+            if (chainIdResponse.hasError()) {
+                throw new BlockchainLedgerException(
+                        "Chain ID request failed: " + chainIdResponse.getError().getMessage()
+                );
+            }
+
+            if (blockNumberResponse.hasError()) {
+                throw new BlockchainLedgerException(
+                        "Latest block request failed: "
+                                + blockNumberResponse.getError().getMessage()
+                );
+            }
+
+            Long chainId = chainIdResponse.getChainId().longValue();
+            Long latestBlockNumber = blockNumberResponse.getBlockNumber().longValue();
+            boolean contractDeployed = contractConfigured
+                    && isContractDeployed(web3j, properties.getContractAddress());
+
+            if (!contractConfigured) {
+                return connectedButDegraded(
+                        signerConfigured,
+                        contractAddress,
+                        chainId,
+                        latestBlockNumber,
+                        false,
+                        "Blockchain node is reachable, but the contract address is not configured."
+                );
+            }
+
+            if (!contractDeployed) {
+                return connectedButDegraded(
+                        signerConfigured,
+                        contractAddress,
+                        chainId,
+                        latestBlockNumber,
+                        false,
+                        "Blockchain node is reachable, but no contract code exists at the configured address."
+                );
+            }
+
+            if (!signerConfigured) {
+                return connectedButDegraded(
+                        false,
+                        contractAddress,
+                        chainId,
+                        latestBlockNumber,
+                        true,
+                        "Blockchain node and contract are available, but the signer key is missing or invalid."
+                );
+            }
+
+            return new BlockchainHealthSnapshot(
+                    BlockchainHealthStatus.HEALTHY,
+                    true,
+                    true,
+                    true,
+                    true,
+                    true,
+                    contractAddress,
+                    chainId,
+                    latestBlockNumber,
+                    "Blockchain node, deployed contract, and signer configuration are ready."
+            );
+        } catch (Exception exception) {
+            return new BlockchainHealthSnapshot(
+                    BlockchainHealthStatus.UNAVAILABLE,
+                    true,
+                    false,
+                    contractConfigured,
+                    false,
+                    signerConfigured,
+                    contractAddress,
+                    null,
+                    null,
+                    "Blockchain RPC health check failed: " + getFailureMessage(exception)
+            );
+        }
+    }
+
+    private BlockchainHealthSnapshot connectedButDegraded(
+            boolean signerConfigured,
+            String contractAddress,
+            Long chainId,
+            Long latestBlockNumber,
+            boolean contractDeployed,
+            String message
+    ) {
+        return new BlockchainHealthSnapshot(
+                BlockchainHealthStatus.DEGRADED,
+                true,
+                true,
+                StringUtils.hasText(contractAddress),
+                contractDeployed,
+                signerConfigured,
+                contractAddress,
+                chainId,
+                latestBlockNumber,
+                message
+        );
+    }
+
+    private boolean isContractDeployed(Web3j web3j, String contractAddress) throws Exception {
+        EthGetCode codeResponse = web3j.ethGetCode(
+                contractAddress,
+                DefaultBlockParameterName.LATEST
+        ).send();
+
+        if (codeResponse.hasError()) {
+            throw new BlockchainLedgerException(
+                    "Contract code request failed: " + codeResponse.getError().getMessage()
+            );
+        }
+
+        String contractCode = codeResponse.getCode();
+        return StringUtils.hasText(contractCode)
+                && !"0x".equalsIgnoreCase(contractCode)
+                && !"0x0".equalsIgnoreCase(contractCode)
+                && !"0x00".equalsIgnoreCase(contractCode);
+    }
+
+    private boolean hasValidSignerConfiguration() {
+        if (!StringUtils.hasText(properties.getPrivateKey())) {
+            return false;
+        }
+
+        try {
+            String normalizedPrivateKey = normalizePrivateKey(properties.getPrivateKey());
+            if (!normalizedPrivateKey.matches("[0-9a-fA-F]{64}")) {
+                return false;
+            }
+
+            Credentials.create(normalizedPrivateKey);
+            return true;
+        } catch (RuntimeException exception) {
+            return false;
+        }
+    }
+
+    private String getFailureMessage(Exception exception) {
+        return StringUtils.hasText(exception.getMessage())
+                ? exception.getMessage()
+                : exception.getClass().getSimpleName();
     }
 
     private Web3j buildWeb3j() {

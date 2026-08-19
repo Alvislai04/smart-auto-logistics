@@ -17,4 +17,10 @@ public interface AdminNotificationRepository extends JpaRepository<AdminNotifica
             Long referenceId,
             AdminNotificationStatus status
     );
+
+    List<AdminNotification> findByReferenceTypeAndReferenceIdAndStatus(
+            String referenceType,
+            Long referenceId,
+            AdminNotificationStatus status
+    );
 }

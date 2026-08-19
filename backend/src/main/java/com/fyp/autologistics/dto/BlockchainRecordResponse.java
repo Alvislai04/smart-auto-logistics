@@ -16,6 +16,8 @@ public class BlockchainRecordResponse {
     private LocalDateTime recordedAt;
     private LocalDateTime verifiedAt;
     private String verificationMessage;
+    private Integer retryCount;
+    private LocalDateTime lastRetryAt;
 
     public BlockchainRecordResponse(
             Long id,
@@ -27,7 +29,9 @@ public class BlockchainRecordResponse {
             BlockchainRecordStatus status,
             LocalDateTime recordedAt,
             LocalDateTime verifiedAt,
-            String verificationMessage
+            String verificationMessage,
+            Integer retryCount,
+            LocalDateTime lastRetryAt
     ) {
         this.id = id;
         this.shipmentId = shipmentId;
@@ -39,6 +43,8 @@ public class BlockchainRecordResponse {
         this.recordedAt = recordedAt;
         this.verifiedAt = verifiedAt;
         this.verificationMessage = verificationMessage;
+        this.retryCount = retryCount;
+        this.lastRetryAt = lastRetryAt;
     }
 
     public Long getId() {
@@ -80,4 +86,13 @@ public class BlockchainRecordResponse {
     public String getVerificationMessage() {
         return verificationMessage;
     }
+
+    public Integer getRetryCount() {
+        return retryCount;
+    }
+
+    public LocalDateTime getLastRetryAt() {
+        return lastRetryAt;
+    }
+
 }

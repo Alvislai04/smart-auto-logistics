@@ -48,6 +48,13 @@ public class SimulationSession {
 
     private String createdBy;
 
+    @Column(nullable = false)
+    private Boolean systemManaged;
+
+    private String lastProfileKey;
+
+    private String lastProfileName;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -65,6 +72,10 @@ public class SimulationSession {
 
         if (this.generatedEvents == null) {
             this.generatedEvents = 0;
+        }
+
+        if (this.systemManaged == null) {
+            this.systemManaged = true;
         }
 
         if (this.createdAt == null) {
@@ -177,6 +188,30 @@ public class SimulationSession {
 
     public void setCreatedBy(String createdBy) {
         this.createdBy = createdBy;
+    }
+
+    public Boolean getSystemManaged() {
+        return systemManaged;
+    }
+
+    public void setSystemManaged(Boolean systemManaged) {
+        this.systemManaged = systemManaged;
+    }
+
+    public String getLastProfileKey() {
+        return lastProfileKey;
+    }
+
+    public void setLastProfileKey(String lastProfileKey) {
+        this.lastProfileKey = lastProfileKey;
+    }
+
+    public String getLastProfileName() {
+        return lastProfileName;
+    }
+
+    public void setLastProfileName(String lastProfileName) {
+        this.lastProfileName = lastProfileName;
     }
 
     public LocalDateTime getCreatedAt() {

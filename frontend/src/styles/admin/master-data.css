@@ -1,0 +1,124 @@
+.master-data-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.master-data-tabs button {
+  display: grid;
+  gap: 5px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-heading);
+  text-align: left;
+  box-shadow: var(--shadow-sm);
+}
+
+.master-data-tabs button:hover,
+.master-data-tabs button.active {
+  border-color: var(--color-primary);
+  background: #eff6ff;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.12);
+}
+
+.master-data-tabs button span {
+  font-weight: 900;
+}
+
+.master-data-tabs button small {
+  line-height: 1.4;
+}
+
+.master-data-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.85fr) minmax(0, 1.45fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.master-data-form .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.master-data-active-field {
+  align-self: end;
+}
+
+.master-data-list-panel {
+  min-width: 0;
+}
+
+.master-data-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.master-data-toolbar h3,
+.master-data-toolbar p {
+  margin: 0;
+}
+
+.master-data-toolbar p {
+  color: var(--color-muted);
+}
+
+.master-data-toolbar input {
+  max-width: 320px;
+  margin-top: 0;
+}
+
+.master-data-table table {
+  min-width: 860px;
+}
+
+.master-data-table td strong,
+.master-data-table td small {
+  display: block;
+}
+
+.master-data-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.master-data-badge.active {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.master-data-badge.inactive {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+@media (max-width: 1180px) {
+  .master-data-tabs,
+  .master-data-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .master-data-form .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .master-data-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .master-data-toolbar input {
+    max-width: none;
+  }
+}

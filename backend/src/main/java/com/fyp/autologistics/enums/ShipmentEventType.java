@@ -2,6 +2,7 @@ package com.fyp.autologistics.enums;
 
 public enum ShipmentEventType {
     SHIPMENT_CREATED,
+    SHIPMENT_UPDATED,
     STATUS_CHANGED,
     TRACKING_UPDATED,
     DELAY_DETECTED,

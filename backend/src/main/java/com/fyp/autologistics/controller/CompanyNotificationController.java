@@ -8,7 +8,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/company-notifications")
-@CrossOrigin(origins = "http://localhost:5173")
 public class CompanyNotificationController {
 
     private final CompanyNotificationService companyNotificationService;

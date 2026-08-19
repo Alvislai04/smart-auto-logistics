@@ -12,7 +12,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin/integrity-cases")
-@CrossOrigin(origins = "http://localhost:5173")
 public class IntegrityCaseController {
 
     private final IntegrityCaseService integrityCaseService;

@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { dashboardApi } from "../api/dashboardApi";
 import { useAuth } from "../auth/AuthContext";
 import SummaryCard from "../components/dashboard/SummaryCard";
 import OpenAlertsPanel from "../components/dashboard/OpenAlertsPanel";
+import {
+  dashboardRefreshIntervalMs,
+  dashboardRefreshIntervalSeconds,
+} from "../config/dashboardConfig";
 import { formatEnumLabel } from "../utils/formatters";
 
 const dashboardViews = {
@@ -57,11 +61,16 @@ function DashboardPage() {
   const [summary, setSummary] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [refreshErrorMessage, setRefreshErrorMessage] = useState("");
+  const isRequestInFlightRef = useRef(false);
+  const hasDashboardDataRef = useRef(false);
   const dashboardView = resolveDashboardView(currentUser?.role);
 
-  const fetchDashboardData = useCallback(async () => {
-    const overview = await dashboardApi.getOverview();
+  const fetchDashboardData = useCallback(async (signal) => {
+    const overview = await dashboardApi.getOverview({ signal });
 
     return {
       summaryData: overview.summary,
@@ -69,52 +78,92 @@ function DashboardPage() {
     };
   }, []);
 
-  const loadDashboardData = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setErrorMessage("");
+  const loadDashboardData = useCallback(async ({
+    showLoading = false,
+    signal,
+  } = {}) => {
+    if (isRequestInFlightRef.current) {
+      return;
+    }
 
-      const { summaryData, openAlerts } = await fetchDashboardData();
+    try {
+      isRequestInFlightRef.current = true;
+
+      if (showLoading) {
+        setIsLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
+
+      setErrorMessage("");
+      setRefreshErrorMessage("");
+
+      const { summaryData, openAlerts } = await fetchDashboardData(signal);
 
       setSummary(summaryData);
       setAlerts(openAlerts);
-    } catch {
-      setErrorMessage("Failed to load dashboard data.");
+      setLastUpdatedAt(new Date().toISOString());
+      hasDashboardDataRef.current = true;
+    } catch (error) {
+      if (error.name === "CanceledError" || error.code === "ERR_CANCELED") {
+        return;
+      }
+
+      if (hasDashboardDataRef.current) {
+        setRefreshErrorMessage("Live dashboard refresh failed. Showing latest loaded data.");
+      } else {
+        setErrorMessage("Failed to load dashboard data.");
+      }
     } finally {
-      setIsLoading(false);
+      isRequestInFlightRef.current = false;
+
+      if (!signal?.aborted) {
+        if (showLoading) {
+          setIsLoading(false);
+        } else {
+          setIsRefreshing(false);
+        }
+      }
     }
   }, [fetchDashboardData]);
 
   useEffect(() => {
-    let isActive = true;
-
-    async function loadInitialDashboardData() {
-      try {
-        const { summaryData, openAlerts } = await fetchDashboardData();
-
-        if (!isActive) {
-          return;
-        }
-
-        setSummary(summaryData);
-        setAlerts(openAlerts);
-      } catch {
-        if (isActive) {
-          setErrorMessage("Failed to load dashboard data.");
-        }
-      } finally {
-        if (isActive) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    loadInitialDashboardData();
+    const controller = new AbortController();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadDashboardData({ showLoading: true, signal: controller.signal });
 
     return () => {
-      isActive = false;
+      controller.abort();
     };
-  }, [fetchDashboardData]);
+  }, [loadDashboardData]);
+
+  useEffect(() => {
+    const refreshDashboard = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      loadDashboardData();
+    };
+
+    const refreshIntervalId = window.setInterval(
+      refreshDashboard,
+      dashboardRefreshIntervalMs,
+    );
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        loadDashboardData();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(refreshIntervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [loadDashboardData]);
 
   const summaryCards = useMemo(
     () => [
@@ -180,6 +229,14 @@ function DashboardPage() {
     return <p className="error-message">{errorMessage}</p>;
   }
 
+  const lastUpdatedLabel = lastUpdatedAt
+    ? new Date(lastUpdatedAt).toLocaleTimeString("en-MY", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+    : "-";
+
   return (
     <div className="page">
       <div className="page-header">
@@ -188,8 +245,33 @@ function DashboardPage() {
           <h2>{dashboardView.title}</h2>
           <p>{dashboardView.subtitle}</p>
         </div>
-        <button onClick={loadDashboardData}>Refresh</button>
+
+        <div className="dashboard-live-actions">
+          <div className="dashboard-live-status" aria-live="polite">
+            <span
+              className={`dashboard-live-dot ${isRefreshing ? "refreshing" : ""}`}
+            />
+            <div>
+              <strong>{isRefreshing ? "Refreshing" : "Live dashboard"}</strong>
+              <span>
+                Every {dashboardRefreshIntervalSeconds}s - Last {lastUpdatedLabel}
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            disabled={isRefreshing}
+            onClick={() => loadDashboardData()}
+          >
+            {isRefreshing ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
       </div>
+
+      {refreshErrorMessage && (
+        <p className="dashboard-refresh-warning">{refreshErrorMessage}</p>
+      )}
 
       <div className="summary-grid">
         {summaryCards.map((card) => (

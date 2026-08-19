@@ -11,9 +11,7 @@ import {
 function SimulationSessionsPage() {
   const [sessions, setSessions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isActionRunning, setIsActionRunning] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
 
   const loadSessions = useCallback(async (showLoading = true) => {
     try {
@@ -56,7 +54,7 @@ function SimulationSessionsPage() {
       {
         title: "Total Sessions",
         value: sessions.length,
-        description: "All recorded simulation sessions",
+        description: "System telemetry sessions",
       },
       {
         title: "Active",
@@ -64,9 +62,11 @@ function SimulationSessionsPage() {
         description: "Generating tracking events",
       },
       {
-        title: "Paused",
-        value: countByStatus.PAUSED ?? 0,
-        description: "Waiting for resume",
+        title: "Delayed",
+        value: sessions.filter(
+          (session) => session.conditionStatus === "DELAYED",
+        ).length,
+        description: "Latest condition delayed",
       },
       {
         title: "Completed",
@@ -75,43 +75,6 @@ function SimulationSessionsPage() {
       },
     ];
   }, [sessions]);
-
-  const runSessionAction = async (action, successText, failureText) => {
-    try {
-      setIsActionRunning(true);
-      setErrorMessage("");
-      setSuccessMessage("");
-
-      await action();
-      setSuccessMessage(successText);
-      await loadSessions(false);
-    } catch (error) {
-      setErrorMessage(error.response?.data?.message || failureText);
-    } finally {
-      setIsActionRunning(false);
-    }
-  };
-
-  const handlePause = (sessionId) =>
-    runSessionAction(
-      () => simulationApi.pauseSession(sessionId),
-      "Simulation session paused.",
-      "Failed to pause simulation session.",
-    );
-
-  const handleResume = (sessionId) =>
-    runSessionAction(
-      () => simulationApi.resumeSession(sessionId),
-      "Simulation session resumed.",
-      "Failed to resume simulation session.",
-    );
-
-  const handleStop = (sessionId) =>
-    runSessionAction(
-      () => simulationApi.stopSession(sessionId),
-      "Simulation session stopped.",
-      "Failed to stop simulation session.",
-    );
 
   if (isLoading) {
     return <p>Loading simulation sessions...</p>;
@@ -131,7 +94,6 @@ function SimulationSessionsPage() {
       </div>
 
       {errorMessage && <p className="error-message">{errorMessage}</p>}
-      {successMessage && <p className="success-message">{successMessage}</p>}
 
       <div className="summary-grid">
         {summaryCards.map((card) => (
@@ -154,12 +116,13 @@ function SimulationSessionsPage() {
                 <th>Shipment</th>
                 <th>Status</th>
                 <th>Interval</th>
+                <th>Scenario</th>
+                <th>Condition</th>
                 <th>Speed</th>
                 <th>Position</th>
                 <th>Generated</th>
                 <th>Last Run</th>
                 <th>Next Run</th>
-                <th>Actions</th>
               </tr>
             </thead>
 
@@ -179,6 +142,8 @@ function SimulationSessionsPage() {
                     <small>{formatEnumLabel(session.shipmentStatus)}</small>
                   </td>
                   <td>{session.intervalSeconds}s</td>
+                  <td>{session.lastProfileName || "-"}</td>
+                  <td>{formatEnumLabel(session.conditionStatus)}</td>
                   <td>{session.speed} km/h</td>
                   <td>
                     {formatCoordinate(session.currentLatitude)},{" "}
@@ -190,40 +155,6 @@ function SimulationSessionsPage() {
                   </td>
                   <td>{formatDateTime(session.lastRunAt)}</td>
                   <td>{formatDateTime(session.nextRunAt)}</td>
-                  <td>
-                    <div className="simulation-table-actions">
-                      {session.status === "ACTIVE" && (
-                        <button
-                          type="button"
-                          disabled={isActionRunning}
-                          onClick={() => handlePause(session.id)}
-                        >
-                          Pause
-                        </button>
-                      )}
-
-                      {session.status === "PAUSED" && (
-                        <button
-                          type="button"
-                          disabled={isActionRunning}
-                          onClick={() => handleResume(session.id)}
-                        >
-                          Resume
-                        </button>
-                      )}
-
-                      {["ACTIVE", "PAUSED"].includes(session.status) && (
-                        <button
-                          type="button"
-                          className="danger-button"
-                          disabled={isActionRunning}
-                          onClick={() => handleStop(session.id)}
-                        >
-                          Stop
-                        </button>
-                      )}
-                    </div>
-                  </td>
                 </tr>
               ))}
             </tbody>

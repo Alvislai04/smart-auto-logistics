@@ -26,6 +26,9 @@ public class SimulationSessionResponse {
     private String destination;
     private String dealershipName;
     private String createdBy;
+    private Boolean systemManaged;
+    private String lastProfileKey;
+    private String lastProfileName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -48,6 +51,9 @@ public class SimulationSessionResponse {
             String destination,
             String dealershipName,
             String createdBy,
+            Boolean systemManaged,
+            String lastProfileKey,
+            String lastProfileName,
             LocalDateTime createdAt,
             LocalDateTime updatedAt
     ) {
@@ -69,6 +75,9 @@ public class SimulationSessionResponse {
         this.destination = destination;
         this.dealershipName = dealershipName;
         this.createdBy = createdBy;
+        this.systemManaged = systemManaged;
+        this.lastProfileKey = lastProfileKey;
+        this.lastProfileName = lastProfileName;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -143,6 +152,18 @@ public class SimulationSessionResponse {
 
     public String getCreatedBy() {
         return createdBy;
+    }
+
+    public Boolean getSystemManaged() {
+        return systemManaged;
+    }
+
+    public String getLastProfileKey() {
+        return lastProfileKey;
+    }
+
+    public String getLastProfileName() {
+        return lastProfileName;
     }
 
     public LocalDateTime getCreatedAt() {

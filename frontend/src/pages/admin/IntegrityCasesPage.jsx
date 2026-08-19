@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { integrityCaseApi } from "../../api/integrityCaseApi";
 
 const CASE_STATUSES = [
@@ -29,23 +29,24 @@ function IntegrityCasesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  useEffect(() => {
-    loadIntegrityCases();
-  }, []);
-
-  const loadIntegrityCases = async () => {
+  const loadIntegrityCases = useCallback(async () => {
     try {
       setIsLoading(true);
       setErrorMessage("");
 
       const data = await integrityCaseApi.getAll();
       setCases(data);
-    } catch (error) {
+    } catch {
       setErrorMessage("Failed to load integrity cases.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadIntegrityCases();
+  }, [loadIntegrityCases]);
 
   const selectedCase = useMemo(() => {
     return cases.find((integrityCase) => integrityCase.id === selectedCaseId);
@@ -254,8 +255,8 @@ function IntegrityCasesPage() {
                   <p>{integrityCase.title}</p>
 
                   <small>
-                    Shipment #{integrityCase.shipmentId} · Event #
-                    {integrityCase.shipmentEventId} · Blockchain Record #
+                    Shipment #{integrityCase.shipmentId} - Event #
+                    {integrityCase.shipmentEventId} - Blockchain Record #
                     {integrityCase.blockchainRecordId}
                   </small>
                 </button>

@@ -1,6 +1,7 @@
 package com.fyp.autologistics.dto;
 
 import com.fyp.autologistics.enums.AlertSeverity;
+import com.fyp.autologistics.enums.AlertReferenceType;
 import com.fyp.autologistics.enums.AlertStatus;
 import com.fyp.autologistics.enums.AlertType;
 
@@ -11,6 +12,9 @@ public class AlertResponse {
     private Long id;
     private Long shipmentId;
     private String shipmentCode;
+    private AlertReferenceType referenceType;
+    private Long referenceId;
+    private String referenceLabel;
     private AlertType alertType;
     private AlertSeverity severity;
     private AlertStatus status;
@@ -24,6 +28,9 @@ public class AlertResponse {
             Long id,
             Long shipmentId,
             String shipmentCode,
+            AlertReferenceType referenceType,
+            Long referenceId,
+            String referenceLabel,
             AlertType alertType,
             AlertSeverity severity,
             AlertStatus status,
@@ -36,6 +43,9 @@ public class AlertResponse {
         this.id = id;
         this.shipmentId = shipmentId;
         this.shipmentCode = shipmentCode;
+        this.referenceType = referenceType;
+        this.referenceId = referenceId;
+        this.referenceLabel = referenceLabel;
         this.alertType = alertType;
         this.severity = severity;
         this.status = status;
@@ -56,6 +66,18 @@ public class AlertResponse {
 
     public String getShipmentCode() {
         return shipmentCode;
+    }
+
+    public AlertReferenceType getReferenceType() {
+        return referenceType;
+    }
+
+    public Long getReferenceId() {
+        return referenceId;
+    }
+
+    public String getReferenceLabel() {
+        return referenceLabel;
     }
 
     public AlertType getAlertType() {

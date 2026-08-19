@@ -82,6 +82,27 @@ public class AdminNotificationService {
         return mapToResponse(savedNotification);
     }
 
+    @Transactional
+    public void markUnreadReferenceNotificationsAsRead(
+            String referenceType,
+            Long referenceId
+    ) {
+        List<AdminNotification> notifications =
+                adminNotificationRepository.findByReferenceTypeAndReferenceIdAndStatus(
+                        referenceType,
+                        referenceId,
+                        AdminNotificationStatus.UNREAD
+                );
+
+        LocalDateTime readAt = LocalDateTime.now();
+        notifications.forEach(notification -> {
+            notification.setStatus(AdminNotificationStatus.READ);
+            notification.setReadAt(readAt);
+        });
+
+        adminNotificationRepository.saveAll(notifications);
+    }
+
     private AdminNotificationResponse getLatestNotificationByReference(
             String referenceType,
             Long referenceId

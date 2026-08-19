@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { shipmentApi } from "../api/shipmentApi";
 import { useAuth } from "../auth/AuthContext";
 import { formatDateTime, formatEnumLabel } from "../utils/formatters";
+import { isShipmentEditableForUser } from "../utils/shipmentFormUtils";
 
 const shipmentStatuses = [
   "CREATED",
@@ -325,7 +326,12 @@ function ShipmentsPage() {
                     <small>{shipment.stockLocation || "-"}</small>
                   </td>
                   <td>
-                    <Link to={`/shipments/${shipment.id}`}>View</Link>
+                    <div className="shipment-row-actions">
+                      <Link to={`/shipments/${shipment.id}`}>View</Link>
+                      {isShipmentEditableForUser(shipment, currentUser) && (
+                        <Link to={`/shipments/${shipment.id}/edit`}>Edit</Link>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

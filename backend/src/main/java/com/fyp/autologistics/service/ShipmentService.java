@@ -4,11 +4,16 @@ import com.fyp.autologistics.dto.ConfirmDeliveryReceiptRequest;
 import com.fyp.autologistics.dto.CreateShipmentRequest;
 import com.fyp.autologistics.dto.ShipmentPageResponse;
 import com.fyp.autologistics.dto.ShipmentResponse;
+import com.fyp.autologistics.dto.UpdateShipmentRequest;
+import com.fyp.autologistics.entity.AppUser;
+import com.fyp.autologistics.event.ShipmentCreatedEvent;
+import com.fyp.autologistics.event.ShipmentStatusChangedEvent;
 import com.fyp.autologistics.entity.ShipmentPartyProfile;
 import com.fyp.autologistics.entity.ShipmentEvent;
 import com.fyp.autologistics.entity.Shipment;
 import com.fyp.autologistics.entity.VehicleModel;
 import com.fyp.autologistics.enums.LogisticsStage;
+import com.fyp.autologistics.enums.ShipmentEventSourceType;
 import com.fyp.autologistics.enums.ShipmentEventType;
 import com.fyp.autologistics.enums.ShipmentStatus;
 import com.fyp.autologistics.enums.UserRole;
@@ -19,6 +24,7 @@ import com.fyp.autologistics.repository.ShipmentPartyProfileRepository;
 import com.fyp.autologistics.repository.ShipmentRepository;
 import com.fyp.autologistics.repository.VehicleModelRepository;
 import com.fyp.autologistics.specification.ShipmentSpecifications;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -28,7 +34,9 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
@@ -62,23 +70,30 @@ public class ShipmentService {
     private final VehicleModelRepository vehicleModelRepository;
     private final ShipmentPartyProfileRepository shipmentPartyProfileRepository;
     private final BlockchainRecordService blockchainRecordService;
+    private final AuthenticatedUserService authenticatedUserService;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     public ShipmentService(
             ShipmentRepository shipmentRepository,
             ShipmentEventRepository shipmentEventRepository,
             VehicleModelRepository vehicleModelRepository,
             ShipmentPartyProfileRepository shipmentPartyProfileRepository,
-            BlockchainRecordService blockchainRecordService
+            BlockchainRecordService blockchainRecordService,
+            AuthenticatedUserService authenticatedUserService,
+            ApplicationEventPublisher applicationEventPublisher
     ) {
         this.shipmentRepository = shipmentRepository;
         this.shipmentEventRepository = shipmentEventRepository;
         this.vehicleModelRepository = vehicleModelRepository;
         this.shipmentPartyProfileRepository = shipmentPartyProfileRepository;
         this.blockchainRecordService = blockchainRecordService;
+        this.authenticatedUserService = authenticatedUserService;
+        this.applicationEventPublisher = applicationEventPublisher;
     }
 
     @Transactional
-    public ShipmentResponse createShipment(CreateShipmentRequest request) {
+    public ShipmentResponse createShipment(CreateShipmentRequest request, String actorEmail) {
+        AppUser actor = authenticatedUserService.getAuthenticatedUser(actorEmail);
         validateShipmentSchedule(request);
         VehicleModel vehicleModel = findActiveVehicleModel(request.getVehicleModelKey());
 
@@ -128,8 +143,12 @@ public class ShipmentService {
                 ShipmentEventType.SHIPMENT_CREATED,
                 "Shipment was created.",
                 null,
-                savedShipment.getStatus().name()
+                savedShipment.getStatus().name(),
+                actor,
+                ShipmentEventSourceType.USER_ACTION
         );
+
+        applicationEventPublisher.publishEvent(new ShipmentCreatedEvent(savedShipment.getId()));
 
         return mapToResponse(savedShipment);
     }
@@ -167,11 +186,166 @@ public class ShipmentService {
         return mapToResponse(shipment);
     }
 
-    public ShipmentResponse updateShipmentStatus(Long id, ShipmentStatus status) {
+    @Transactional
+    public ShipmentResponse updateShipment(
+            Long id,
+            UpdateShipmentRequest request,
+            String actorEmail
+    ) {
         Shipment shipment = findShipmentEntityById(id);
+        AppUser actor = authenticatedUserService.getAuthenticatedUser(actorEmail);
+
+        validateShipmentEditAllowed(shipment, actor, request.getManufacturerKey());
+        validateShipmentSchedule(request);
+
+        VehicleModel vehicleModel = findActiveVehicleModel(request.getVehicleModelKey());
+        ShipmentPartyProfile manufacturer = findActiveParty(
+                request.getManufacturerKey(),
+                UserRole.MANUFACTURER,
+                "manufacturer"
+        );
+        ShipmentPartyProfile dealership = findActiveParty(
+                request.getDealershipKey(),
+                UserRole.DEALERSHIP,
+                "dealership"
+        );
+
+        List<String> changedFields = new ArrayList<>();
+
+        String vehicleVin = normalizeRequiredText(request.getVehicleVin(), "Vehicle VIN");
+        String stockLocation = normalizeRequiredText(request.getStockLocation(), "Stock location");
+        String responsiblePerson = normalizeRequiredText(
+                request.getResponsiblePerson(),
+                "Responsible person"
+        );
+        String responsibleContact = normalizeRequiredText(
+                request.getResponsibleContact(),
+                "Responsible contact"
+        );
+        String customerName = normalizeRequiredText(request.getCustomerName(), "Customer name");
+        String customerContact = normalizeRequiredText(
+                request.getCustomerContact(),
+                "Customer contact"
+        );
+        String customerAddress = normalizeRequiredText(
+                request.getCustomerAddress(),
+                "Customer address"
+        );
+        String shipmentDocumentReference = normalizeText(
+                request.getShipmentDocumentReference()
+        );
+        String origin = resolveOperatingLocation(manufacturer, "Manufacturer origin");
+        String destination = resolveOperatingLocation(dealership, "Dealership destination");
+        Double originLatitude = resolveLatitude(manufacturer, "Manufacturer origin");
+        Double originLongitude = resolveLongitude(manufacturer, "Manufacturer origin");
+        Double destinationLatitude = resolveLatitude(dealership, "Dealership destination");
+        Double destinationLongitude = resolveLongitude(dealership, "Dealership destination");
+        String dealershipName = resolvePartyName(dealership);
+
+        trackChange(changedFields, "vehicle VIN", shipment.getVehicleVin(), vehicleVin);
+        trackChange(changedFields, "vehicle model", shipment.getVehicleModelCode(),
+                vehicleModel.getModelCode());
+        trackChange(changedFields, "manufacturer origin", shipment.getManufacturerKey(),
+                manufacturer.getPartyKey());
+        trackChange(changedFields, "origin location", shipment.getOrigin(), origin);
+        trackChange(changedFields, "origin latitude", shipment.getOriginLatitude(),
+                originLatitude);
+        trackChange(changedFields, "origin longitude", shipment.getOriginLongitude(),
+                originLongitude);
+        trackChange(changedFields, "dealership destination", shipment.getDealershipKey(),
+                dealership.getPartyKey());
+        trackChange(changedFields, "destination location", shipment.getDestination(),
+                destination);
+        trackChange(changedFields, "destination latitude", shipment.getDestinationLatitude(),
+                destinationLatitude);
+        trackChange(changedFields, "destination longitude", shipment.getDestinationLongitude(),
+                destinationLongitude);
+        trackChange(changedFields, "dealership name", shipment.getDealershipName(),
+                dealershipName);
+        trackChange(changedFields, "estimated departure", shipment.getEstimatedDeparture(),
+                request.getEstimatedDeparture());
+        trackChange(changedFields, "estimated arrival", shipment.getEstimatedArrival(),
+                request.getEstimatedArrival());
+        trackChange(changedFields, "logistics stage", shipment.getCurrentStage(),
+                request.getCurrentStage());
+        trackChange(changedFields, "stock location", shipment.getStockLocation(),
+                stockLocation);
+        trackChange(changedFields, "WIP status", shipment.getWorkInProgressStatus(),
+                request.getWorkInProgressStatus());
+        trackChange(changedFields, "responsible person", shipment.getResponsiblePerson(),
+                responsiblePerson);
+        trackChange(changedFields, "responsible contact", shipment.getResponsibleContact(),
+                responsibleContact);
+        trackChange(changedFields, "customer name", shipment.getCustomerName(), customerName);
+        trackChange(changedFields, "customer contact", shipment.getCustomerContact(),
+                customerContact);
+        trackChange(changedFields, "customer address", shipment.getCustomerAddress(),
+                customerAddress);
+        trackChange(changedFields, "shipment document reference",
+                shipment.getShipmentDocumentReference(), shipmentDocumentReference);
+
+        if (changedFields.isEmpty()) {
+            return mapToResponse(shipment);
+        }
+
+        shipment.setVehicleVin(vehicleVin);
+        shipment.setVehicleModelCode(vehicleModel.getModelCode());
+        shipment.setVehicleModel(vehicleModel.getDisplayName());
+        shipment.setManufacturerKey(manufacturer.getPartyKey());
+        shipment.setDealershipKey(dealership.getPartyKey());
+        shipment.setOrigin(origin);
+        shipment.setDestination(destination);
+        shipment.setOriginLatitude(originLatitude);
+        shipment.setOriginLongitude(originLongitude);
+        shipment.setDestinationLatitude(destinationLatitude);
+        shipment.setDestinationLongitude(destinationLongitude);
+        shipment.setDealershipName(dealershipName);
+        shipment.setEstimatedArrival(request.getEstimatedArrival());
+        shipment.setEstimatedDeparture(request.getEstimatedDeparture());
+        shipment.setCurrentStage(request.getCurrentStage());
+        shipment.setStockLocation(stockLocation);
+        shipment.setWorkInProgressStatus(request.getWorkInProgressStatus());
+        shipment.setResponsiblePerson(responsiblePerson);
+        shipment.setResponsibleContact(responsibleContact);
+        shipment.setCustomerName(customerName);
+        shipment.setCustomerContact(customerContact);
+        shipment.setCustomerAddress(customerAddress);
+        shipment.setShipmentDocumentReference(shipmentDocumentReference);
+
+        Shipment updatedShipment = shipmentRepository.save(shipment);
+
+        createShipmentEvent(
+                updatedShipment,
+                ShipmentEventType.SHIPMENT_UPDATED,
+                "Shipment details updated by "
+                        + resolveActorLabel(actor)
+                        + ". Changed fields: "
+                        + String.join(", ", changedFields)
+                        + ".",
+                null,
+                null,
+                actor,
+                ShipmentEventSourceType.USER_ACTION
+        );
+
+        return mapToResponse(updatedShipment);
+    }
+
+    @Transactional
+    public ShipmentResponse updateShipmentStatus(
+            Long id,
+            ShipmentStatus status,
+            String actorEmail
+    ) {
+        Shipment shipment = findShipmentEntityById(id);
+        AppUser actor = authenticatedUserService.getAuthenticatedUser(actorEmail);
         ShipmentStatus previousStatus = shipment.getStatus();
 
         validateStatusTransition(previousStatus, status);
+
+        if (previousStatus == status) {
+            return mapToResponse(shipment);
+        }
 
         shipment.setStatus(status);
         shipment.setCurrentStage(resolveStageForStatus(status, shipment.getCurrentStage()));
@@ -183,17 +357,28 @@ public class ShipmentService {
                 ShipmentEventType.STATUS_CHANGED,
                 "Shipment status changed from " + previousStatus + " to " + status + ".",
                 previousStatus.name(),
-                status.name()
+                status.name(),
+                actor,
+                ShipmentEventSourceType.USER_ACTION
+        );
+
+        publishStatusChangedEvent(
+                updatedShipment,
+                previousStatus,
+                ShipmentEventSourceType.USER_ACTION
         );
 
         return mapToResponse(updatedShipment);
     }
 
+    @Transactional
     public ShipmentResponse confirmDeliveryReceipt(
             Long id,
-            ConfirmDeliveryReceiptRequest request
+            ConfirmDeliveryReceiptRequest request,
+            String actorEmail
     ) {
         Shipment shipment = findShipmentEntityById(id);
+        AppUser actor = authenticatedUserService.getAuthenticatedUser(actorEmail);
 
         if (shipment.getReceiptConfirmedAt() != null) {
             throw new BadRequestException("Delivery receipt has already been confirmed.");
@@ -221,8 +406,18 @@ public class ShipmentService {
                 ShipmentEventType.DELIVERY_CONFIRMED,
                 "Delivery receipt confirmed by " + confirmedBy + ".",
                 previousStatus.name(),
-                updatedShipment.getStatus().name()
+                updatedShipment.getStatus().name(),
+                actor,
+                ShipmentEventSourceType.USER_ACTION
         );
+
+        if (previousStatus != updatedShipment.getStatus()) {
+            publishStatusChangedEvent(
+                    updatedShipment,
+                    previousStatus,
+                    ShipmentEventSourceType.USER_ACTION
+            );
+        }
 
         return mapToResponse(updatedShipment);
     }
@@ -239,6 +434,52 @@ public class ShipmentService {
 
     public Shipment saveShipmentEntity(Shipment shipment) {
         return shipmentRepository.save(shipment);
+    }
+
+    public Shipment updateSystemStatus(
+            Shipment shipment,
+            ShipmentStatus status,
+            LogisticsStage stage,
+            ShipmentEventSourceType sourceType,
+            String description
+    ) {
+        ShipmentStatus previousStatus = shipment.getStatus();
+
+        if (previousStatus == status && shipment.getCurrentStage() == stage) {
+            return shipment;
+        }
+
+        shipment.setStatus(status);
+        shipment.setCurrentStage(stage);
+        Shipment updatedShipment = shipmentRepository.save(shipment);
+
+        if (previousStatus != status) {
+            createShipmentEvent(
+                    updatedShipment,
+                    ShipmentEventType.STATUS_CHANGED,
+                    description,
+                    previousStatus == null ? null : previousStatus.name(),
+                    status.name(),
+                    null,
+                    sourceType
+            );
+            publishStatusChangedEvent(updatedShipment, previousStatus, sourceType);
+        }
+
+        return updatedShipment;
+    }
+
+    private void publishStatusChangedEvent(
+            Shipment shipment,
+            ShipmentStatus previousStatus,
+            ShipmentEventSourceType sourceType
+    ) {
+        applicationEventPublisher.publishEvent(new ShipmentStatusChangedEvent(
+                shipment.getId(),
+                previousStatus,
+                shipment.getStatus(),
+                sourceType
+        ));
     }
 
     private void validateStatusTransition(
@@ -291,8 +532,66 @@ public class ShipmentService {
         }
     }
 
+    private void validateShipmentEditAllowed(
+            Shipment shipment,
+            AppUser actor,
+            String requestedManufacturerKey
+    ) {
+        if (shipment.getStatus() != ShipmentStatus.CREATED
+                && shipment.getStatus() != ShipmentStatus.READY_FOR_DISPATCH) {
+            throw new BadRequestException(
+                    "Shipment details can only be edited before pickup or in-transit tracking begins."
+            );
+        }
+
+        if (actor.getRole() == UserRole.ADMIN) {
+            return;
+        }
+
+        if (actor.getRole() != UserRole.MANUFACTURER) {
+            throw new BadRequestException("Only manufacturers can edit shipment details.");
+        }
+
+        String actorPartyKey = normalizeText(actor.getPartyProfileKey());
+        String normalizedRequestedManufacturerKey = normalizeText(requestedManufacturerKey);
+
+        if (actorPartyKey == null) {
+            throw new BadRequestException(
+                    "Your manufacturer account is not linked to a shipment party profile."
+            );
+        }
+
+        if (!actorPartyKey.equals(shipment.getManufacturerKey())
+                || !actorPartyKey.equals(normalizedRequestedManufacturerKey)) {
+            throw new BadRequestException(
+                    "Manufacturers can only edit shipments linked to their own company profile."
+            );
+        }
+    }
+
     private void validateShipmentSchedule(CreateShipmentRequest request) {
-        if (!request.getEstimatedArrival().isAfter(request.getEstimatedDeparture())) {
+        validateShipmentSchedule(
+                request.getEstimatedDeparture(),
+                request.getEstimatedArrival()
+        );
+    }
+
+    private void validateShipmentSchedule(UpdateShipmentRequest request) {
+        validateShipmentSchedule(
+                request.getEstimatedDeparture(),
+                request.getEstimatedArrival()
+        );
+    }
+
+    private void validateShipmentSchedule(
+            LocalDateTime estimatedDeparture,
+            LocalDateTime estimatedArrival
+    ) {
+        if (estimatedDeparture == null || estimatedArrival == null) {
+            throw new BadRequestException("Estimated departure and arrival are required.");
+        }
+
+        if (!estimatedArrival.isAfter(estimatedDeparture)) {
             throw new BadRequestException("Estimated arrival must be after estimated departure.");
         }
     }
@@ -440,12 +739,43 @@ public class ShipmentService {
         return trimmedValue.isEmpty() ? null : trimmedValue;
     }
 
+    private String normalizeRequiredText(String value, String fieldName) {
+        String normalizedValue = normalizeText(value);
+
+        if (normalizedValue == null) {
+            throw new BadRequestException(fieldName + " is required.");
+        }
+
+        return normalizedValue;
+    }
+
+    private void trackChange(
+            List<String> changedFields,
+            String fieldName,
+            Object previousValue,
+            Object nextValue
+    ) {
+        if (!Objects.equals(previousValue, nextValue)) {
+            changedFields.add(fieldName);
+        }
+    }
+
+    private String resolveActorLabel(AppUser actor) {
+        if (StringUtils.hasText(actor.getFullName())) {
+            return actor.getFullName().trim();
+        }
+
+        return actor.getEmail();
+    }
+
     private void createShipmentEvent(
             Shipment shipment,
             ShipmentEventType eventType,
             String description,
             String previousStatus,
-            String newStatus
+            String newStatus,
+            AppUser actor,
+            ShipmentEventSourceType sourceType
     ) {
         ShipmentEvent shipmentEvent = new ShipmentEvent();
         shipmentEvent.setShipment(shipment);
@@ -453,15 +783,35 @@ public class ShipmentService {
         shipmentEvent.setDescription(description);
         shipmentEvent.setPreviousStatus(previousStatus);
         shipmentEvent.setNewStatus(newStatus);
+        applyEventMetadata(shipmentEvent, actor, sourceType);
 
         ShipmentEvent savedEvent = shipmentEventRepository.save(shipmentEvent);
 
         recordToBlockchainIfRequired(savedEvent);
     }
 
+    private void applyEventMetadata(
+            ShipmentEvent shipmentEvent,
+            AppUser actor,
+            ShipmentEventSourceType sourceType
+    ) {
+        if (actor != null) {
+            shipmentEvent.setActorUserId(actor.getId());
+            shipmentEvent.setActorName(actor.getFullName());
+            shipmentEvent.setActorEmail(actor.getEmail());
+            shipmentEvent.setActorRole(actor.getRole());
+        }
+
+        shipmentEvent.setSourceType(
+                sourceType == null ? ShipmentEventSourceType.SYSTEM_AUTOMATION : sourceType
+        );
+        shipmentEvent.setEventPayloadVersion(2);
+    }
+
     private void recordToBlockchainIfRequired(ShipmentEvent shipmentEvent) {
         boolean shouldRecord = switch (shipmentEvent.getEventType()) {
             case SHIPMENT_CREATED,
+                SHIPMENT_UPDATED,
                 STATUS_CHANGED,
                 DELAY_DETECTED,
                 IDLE_DETECTED,

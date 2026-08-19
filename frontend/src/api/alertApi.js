@@ -6,6 +6,11 @@ export const alertApi = {
     return response.data;
   },
 
+  getOpenAlertCount: async () => {
+    const response = await axiosClient.get("/alerts/open-count");
+    return response.data;
+  },
+
   getByShipmentId: async (shipmentId) => {
     const response = await axiosClient.get(`/alerts/shipment/${shipmentId}`);
     return response.data;

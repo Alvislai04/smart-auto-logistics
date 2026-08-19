@@ -5,7 +5,11 @@ import com.fyp.autologistics.enums.AlertStatus;
 import com.fyp.autologistics.enums.AlertType;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.data.domain.Pageable;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface AlertRepository extends JpaRepository<Alert, Long>, JpaSpecificationExecutor<Alert> {
@@ -16,24 +20,41 @@ public interface AlertRepository extends JpaRepository<Alert, Long>, JpaSpecific
 
     List<Alert> findTop5ByStatusOrderByCreatedAtDesc(AlertStatus status);
 
-    List<Alert> findByStatusAndShipmentManufacturerKeyOrderByCreatedAtDesc(
-            AlertStatus status,
-            String manufacturerKey
+    @Query("""
+            select a
+            from Alert a
+            left join a.shipment s
+            left join a.stockAlertRule r
+            left join r.partyProfile p
+            where a.status = :status
+              and (s.manufacturerKey = :partyKey or p.partyKey = :partyKey)
+            order by a.createdAt desc
+            """)
+    List<Alert> findVisibleToManufacturer(
+            @Param("status") AlertStatus status,
+            @Param("partyKey") String partyKey,
+            Pageable pageable
     );
 
-    List<Alert> findTop5ByStatusAndShipmentManufacturerKeyOrderByCreatedAtDesc(
-            AlertStatus status,
-            String manufacturerKey
+    @Query("""
+            select a
+            from Alert a
+            left join a.shipment s
+            left join a.stockAlertRule r
+            left join r.partyProfile p
+            where a.status = :status
+              and (s.dealershipKey = :partyKey or p.partyKey = :partyKey)
+            order by a.createdAt desc
+            """)
+    List<Alert> findVisibleToDealership(
+            @Param("status") AlertStatus status,
+            @Param("partyKey") String partyKey,
+            Pageable pageable
     );
 
-    List<Alert> findByStatusAndShipmentDealershipKeyOrderByCreatedAtDesc(
+    List<Alert> findByStatusAndShipmentIsNotNullOrderByCreatedAtDesc(
             AlertStatus status,
-            String dealershipKey
-    );
-
-    List<Alert> findTop5ByStatusAndShipmentDealershipKeyOrderByCreatedAtDesc(
-            AlertStatus status,
-            String dealershipKey
+            Pageable pageable
     );
 
     boolean existsByShipmentIdAndAlertTypeAndStatus(
@@ -42,9 +63,47 @@ public interface AlertRepository extends JpaRepository<Alert, Long>, JpaSpecific
             AlertStatus status
     );
 
+    List<Alert> findByShipmentIdAndAlertTypeAndStatusInOrderByCreatedAtDesc(
+            Long shipmentId,
+            AlertType alertType,
+            Collection<AlertStatus> statuses
+    );
+
+    List<Alert> findByStockAlertRuleIdAndAlertTypeAndStatusInOrderByCreatedAtDesc(
+            Long stockAlertRuleId,
+            AlertType alertType,
+            Collection<AlertStatus> statuses
+    );
+
     long countByStatus(AlertStatus status);
 
-    long countByStatusAndShipmentManufacturerKey(AlertStatus status, String manufacturerKey);
+    @Query("""
+            select count(a)
+            from Alert a
+            left join a.shipment s
+            left join a.stockAlertRule r
+            left join r.partyProfile p
+            where a.status = :status
+              and (s.manufacturerKey = :partyKey or p.partyKey = :partyKey)
+            """)
+    long countVisibleToManufacturer(
+            @Param("status") AlertStatus status,
+            @Param("partyKey") String partyKey
+    );
 
-    long countByStatusAndShipmentDealershipKey(AlertStatus status, String dealershipKey);
+    @Query("""
+            select count(a)
+            from Alert a
+            left join a.shipment s
+            left join a.stockAlertRule r
+            left join r.partyProfile p
+            where a.status = :status
+              and (s.dealershipKey = :partyKey or p.partyKey = :partyKey)
+            """)
+    long countVisibleToDealership(
+            @Param("status") AlertStatus status,
+            @Param("partyKey") String partyKey
+    );
+
+    long countByStatusAndShipmentIsNotNull(AlertStatus status);
 }

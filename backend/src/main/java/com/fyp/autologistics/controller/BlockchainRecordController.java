@@ -1,6 +1,7 @@
 package com.fyp.autologistics.controller;
 
 import com.fyp.autologistics.dto.BlockchainRecordResponse;
+import com.fyp.autologistics.dto.BlockchainHealthResponse;
 import com.fyp.autologistics.dto.RecordBlockchainEventRequest;
 import com.fyp.autologistics.service.BlockchainRecordService;
 import jakarta.validation.Valid;
@@ -10,7 +11,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/blockchain-records")
-@CrossOrigin(origins = "http://localhost:5173")
 public class BlockchainRecordController {
 
     private final BlockchainRecordService blockchainRecordService;
@@ -38,6 +38,16 @@ public class BlockchainRecordController {
     @PostMapping("/{recordId}/verify")
     public BlockchainRecordResponse verifyRecord(@PathVariable Long recordId) {
         return blockchainRecordService.verifyRecord(recordId);
+    }
+
+    @PostMapping("/{recordId}/retry")
+    public BlockchainRecordResponse retryFailedRecord(@PathVariable Long recordId) {
+        return blockchainRecordService.retryFailedRecord(recordId);
+    }
+
+    @GetMapping("/health")
+    public BlockchainHealthResponse getHealth() {
+        return blockchainRecordService.getHealth();
     }
 
     @GetMapping("/shipment/{shipmentId}")

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { userApi } from "../../api/userApi";
+import { useToast } from "../../components/feedback/ToastContext";
 import { formatCoordinate, formatDateTime, formatEnumLabel } from "../../utils/formatters";
 
 const emptyForm = {
@@ -64,6 +65,7 @@ function buildUpdatePayload(formData) {
 }
 
 function UserAccountsPage() {
+  const { showToast } = useToast();
   const [users, setUsers] = useState([]);
   const [roleOptions, setRoleOptions] = useState([]);
   const [formData, setFormData] = useState(emptyForm);
@@ -98,6 +100,7 @@ function UserAccountsPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadPageData();
   }, [loadPageData]);
 
@@ -196,19 +199,36 @@ function UserAccountsPage() {
       setSuccessMessage("");
 
       if (isEditing) {
-        await userApi.updateUser(formData.id, buildUpdatePayload(formData));
+        const updatedUser = await userApi.updateUser(
+          formData.id,
+          buildUpdatePayload(formData),
+        );
         setSuccessMessage("User account updated.");
+        showToast({
+          type: "success",
+          title: "User account updated",
+          message: `${updatedUser.fullName} was saved successfully.`,
+        });
       } else {
-        await userApi.createUser(buildCreatePayload(formData));
+        const createdUser = await userApi.createUser(buildCreatePayload(formData));
         setSuccessMessage("User account registered.");
+        showToast({
+          type: "success",
+          title: "User account registered",
+          message: `${createdUser.fullName} can now sign in.`,
+        });
         setFormData(emptyForm);
       }
 
       await loadPageData();
     } catch (error) {
-      setErrorMessage(
-        getErrorMessage(error, "Failed to save user account."),
-      );
+      const message = getErrorMessage(error, "Failed to save user account.");
+      setErrorMessage(message);
+      showToast({
+        type: "error",
+        title: "User account save failed",
+        message,
+      });
     } finally {
       setIsSaving(false);
     }

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import Sidebar from "./components/layout/Sidebar";
@@ -6,23 +7,34 @@ import Topbar from "./components/layout/Topbar";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import RoleDashboardRedirect from "./auth/RoleDashboardRedirect";
 
-import DashboardPage from "./pages/DashboardPage";
-import ShipmentsPage from "./pages/ShipmentsPage";
-import CreateShipmentPage from "./pages/CreateShipmentPage";
-import ShipmentDetailsPage from "./pages/ShipmentDetailsPage";
-import AlertsPage from "./pages/AlertsPage";
-import AccountSettingsPage from "./pages/AccountSettingsPage";
-import SimulationSessionsPage from "./pages/SimulationSessionsPage";
-import ReportsPage from "./pages/reports/ReportsPage";
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const ShipmentsPage = lazy(() => import("./pages/ShipmentsPage"));
+const CreateShipmentPage = lazy(() => import("./pages/CreateShipmentPage"));
+const EditShipmentPage = lazy(() => import("./pages/EditShipmentPage"));
+const ShipmentDetailsPage = lazy(() => import("./pages/ShipmentDetailsPage"));
+const AlertsPage = lazy(() => import("./pages/AlertsPage"));
+const StockMonitoringPage = lazy(() => import("./pages/StockMonitoringPage"));
+const AccountSettingsPage = lazy(() => import("./pages/AccountSettingsPage"));
+const SimulationSessionsPage = lazy(() => import("./pages/SimulationSessionsPage"));
+const ReportsPage = lazy(() => import("./pages/reports/ReportsPage"));
 
-import BlockchainMonitorPage from "./pages/admin/BlockchainMonitorPage";
-import UserAccountsPage from "./pages/admin/UserAccountsPage";
-import AdminNotificationsPage from "./pages/admin/AdminNotificationsPage";
-import CompanyNotificationsPage from "./pages/admin/CompanyNotificationsPage";
-import IntegrityCasesPage from "./pages/admin/IntegrityCasesPage";
+const BlockchainMonitorPage = lazy(
+  () => import("./pages/admin/BlockchainMonitorPage"),
+);
+const MasterDataPage = lazy(() => import("./pages/admin/MasterDataPage"));
+const UserAccountsPage = lazy(() => import("./pages/admin/UserAccountsPage"));
+const AdminNotificationsPage = lazy(
+  () => import("./pages/admin/AdminNotificationsPage"),
+);
+const CompanyNotificationsPage = lazy(
+  () => import("./pages/admin/CompanyNotificationsPage"),
+);
+const IntegrityCasesPage = lazy(
+  () => import("./pages/admin/IntegrityCasesPage"),
+);
 
-import LoginPage from "./pages/auth/LoginPage";
-import AccessDeniedPage from "./pages/auth/AccessDeniedPage";
+const LoginPage = lazy(() => import("./pages/auth/LoginPage"));
+const AccessDeniedPage = lazy(() => import("./pages/auth/AccessDeniedPage"));
 
 const ALL_ROLES = ["ADMIN", "MANUFACTURER", "LOGISTICS_PROVIDER", "DEALERSHIP"];
 
@@ -43,7 +55,15 @@ function AppLayout({ children }) {
 
 function App() {
   return (
-    <Routes>
+    <Suspense
+      fallback={
+        <div className="route-loading" role="status" aria-live="polite">
+          <span className="route-loading-spinner" aria-hidden="true" />
+          <span>Loading page...</span>
+        </div>
+      }
+    >
+      <Routes>
       <Route path="/login" element={<LoginPage />} />
 
       <Route
@@ -146,13 +166,33 @@ function App() {
       />
 
       <Route
+        path="/shipments/:shipmentId/edit"
+        element={
+          <ProtectedRoute allowedRoles={["ADMIN", "MANUFACTURER"]}>
+            <AppLayout>
+              <EditShipmentPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/alerts"
         element={
-          <ProtectedRoute
-            allowedRoles={["ADMIN", "LOGISTICS_PROVIDER", "DEALERSHIP"]}
-          >
+          <ProtectedRoute allowedRoles={ALL_ROLES}>
             <AppLayout>
               <AlertsPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/stock-monitoring"
+        element={
+          <ProtectedRoute allowedRoles={["ADMIN", "MANUFACTURER", "DEALERSHIP"]}>
+            <AppLayout>
+              <StockMonitoringPage />
             </AppLayout>
           </ProtectedRoute>
         }
@@ -203,6 +243,17 @@ function App() {
       />
 
       <Route
+        path="/admin/master-data"
+        element={
+          <ProtectedRoute allowedRoles={ADMIN_ONLY}>
+            <AppLayout>
+              <MasterDataPage />
+            </AppLayout>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/admin/blockchain-monitor"
         element={
           <ProtectedRoute allowedRoles={ADMIN_ONLY}>
@@ -246,8 +297,9 @@ function App() {
         }
       />
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
 

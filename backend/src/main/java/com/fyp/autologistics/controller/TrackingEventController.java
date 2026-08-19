@@ -4,13 +4,13 @@ import com.fyp.autologistics.dto.CreateTrackingEventRequest;
 import com.fyp.autologistics.dto.TrackingEventResponse;
 import com.fyp.autologistics.service.TrackingEventService;
 import jakarta.validation.Valid;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/shipments/{shipmentId}/tracking-events")
-@CrossOrigin(origins = "http://localhost:5173")
 public class TrackingEventController {
 
     private final TrackingEventService trackingEventService;
@@ -22,9 +22,14 @@ public class TrackingEventController {
     @PostMapping
     public TrackingEventResponse createTrackingEvent(
             @PathVariable Long shipmentId,
-            @Valid @RequestBody CreateTrackingEventRequest request
+            @Valid @RequestBody CreateTrackingEventRequest request,
+            Authentication authentication
     ) {
-        return trackingEventService.createTrackingEvent(shipmentId, request);
+        return trackingEventService.createTrackingEvent(
+                shipmentId,
+                request,
+                authentication.getName()
+        );
     }
 
     @GetMapping

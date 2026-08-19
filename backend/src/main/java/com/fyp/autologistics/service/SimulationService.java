@@ -1,48 +1,52 @@
 package com.fyp.autologistics.service;
 
 import com.fyp.autologistics.dto.CreateTrackingEventRequest;
-import com.fyp.autologistics.dto.SimulateTrackingRequest;
-import com.fyp.autologistics.dto.SimulationConditionOptionResponse;
-import com.fyp.autologistics.dto.SimulationOptionsResponse;
 import com.fyp.autologistics.dto.SimulationSessionResponse;
-import com.fyp.autologistics.dto.StartSimulationSessionRequest;
 import com.fyp.autologistics.dto.TrackingEventResponse;
-import com.fyp.autologistics.entity.SimulationSession;
 import com.fyp.autologistics.entity.Shipment;
+import com.fyp.autologistics.entity.SimulationProfile;
+import com.fyp.autologistics.entity.SimulationSession;
 import com.fyp.autologistics.entity.TrackingEvent;
 import com.fyp.autologistics.enums.ConditionStatus;
 import com.fyp.autologistics.enums.LogisticsStage;
+import com.fyp.autologistics.enums.ShipmentEventSourceType;
 import com.fyp.autologistics.enums.ShipmentStatus;
 import com.fyp.autologistics.enums.SimulationSessionStatus;
-import com.fyp.autologistics.exception.BadRequestException;
-import com.fyp.autologistics.exception.ResourceNotFoundException;
+import com.fyp.autologistics.event.ShipmentCreatedEvent;
+import com.fyp.autologistics.repository.ShipmentRepository;
+import com.fyp.autologistics.repository.SimulationProfileRepository;
 import com.fyp.autologistics.repository.SimulationSessionRepository;
 import com.fyp.autologistics.repository.TrackingEventRepository;
 import com.fyp.autologistics.util.GeoDistanceUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 public class SimulationService {
 
+    private static final String SYSTEM_ACTOR = "SYSTEM";
     private static final int MIN_INTERVAL_SECONDS = 5;
-    private static final int DEFAULT_INTERVAL_SECONDS = 30;
     private static final int MAX_INTERVAL_SECONDS = 3600;
-    private static final double MIN_SPEED_KMH = 0.0;
-    private static final double DEFAULT_SPEED_KMH = 60.0;
-    private static final double MAX_SPEED_KMH = 160.0;
-    private static final int MAX_GENERATED_EVENTS = 500;
+    private static final int MIN_MAX_EVENTS = 1;
+    private static final int MAX_MAX_EVENTS = 10_000;
     private static final double ARRIVAL_THRESHOLD_KM = 0.25;
-    private static final double ROUTE_DEVIATION_LATITUDE_OFFSET = 0.12;
+    private static final List<ShipmentStatus> SYSTEM_SIMULATED_SHIPMENT_STATUSES = List.of(
+            ShipmentStatus.CREATED,
+            ShipmentStatus.READY_FOR_DISPATCH,
+            ShipmentStatus.PICKED_UP,
+            ShipmentStatus.IN_TRANSIT,
+            ShipmentStatus.DELAYED
+    );
     private static final List<SimulationSessionStatus> OPEN_SESSION_STATUSES = List.of(
             SimulationSessionStatus.ACTIVE,
             SimulationSessionStatus.PAUSED
@@ -51,99 +55,37 @@ public class SimulationService {
     private final ShipmentService shipmentService;
     private final TrackingEventService trackingEventService;
     private final TrackingEventRepository trackingEventRepository;
+    private final ShipmentRepository shipmentRepository;
+    private final SimulationProfileRepository simulationProfileRepository;
     private final SimulationSessionRepository simulationSessionRepository;
     private final boolean schedulerEnabled;
+    private final int defaultIntervalSeconds;
+    private final int defaultMaxEvents;
 
     public SimulationService(
             ShipmentService shipmentService,
             TrackingEventService trackingEventService,
             TrackingEventRepository trackingEventRepository,
+            ShipmentRepository shipmentRepository,
+            SimulationProfileRepository simulationProfileRepository,
             SimulationSessionRepository simulationSessionRepository,
-            @Value("${app.simulation.scheduler-enabled:true}") boolean schedulerEnabled
+            @Value("${app.simulation.scheduler-enabled:true}") boolean schedulerEnabled,
+            @Value("${app.simulation.default-interval-seconds:15}") int defaultIntervalSeconds,
+            @Value("${app.simulation.default-max-events:500}") int defaultMaxEvents
     ) {
         this.shipmentService = shipmentService;
         this.trackingEventService = trackingEventService;
         this.trackingEventRepository = trackingEventRepository;
+        this.shipmentRepository = shipmentRepository;
+        this.simulationProfileRepository = simulationProfileRepository;
         this.simulationSessionRepository = simulationSessionRepository;
         this.schedulerEnabled = schedulerEnabled;
-    }
-
-    @Transactional(readOnly = true)
-    public SimulationOptionsResponse getSimulationOptions() {
-        return new SimulationOptionsResponse(
-                Arrays.stream(ConditionStatus.values())
-                        .map(conditionStatus -> new SimulationConditionOptionResponse(
-                                conditionStatus.name(),
-                                formatEnumLabel(conditionStatus.name())
-                        ))
-                        .toList(),
-                DEFAULT_INTERVAL_SECONDS,
+        this.defaultIntervalSeconds = clamp(
+                defaultIntervalSeconds,
                 MIN_INTERVAL_SECONDS,
-                MAX_INTERVAL_SECONDS,
-                DEFAULT_SPEED_KMH,
-                MIN_SPEED_KMH,
-                MAX_SPEED_KMH,
-                MAX_GENERATED_EVENTS
+                MAX_INTERVAL_SECONDS
         );
-    }
-
-    @Transactional
-    public TrackingEventResponse simulateNextTrackingPoint(
-            Long shipmentId,
-            SimulateTrackingRequest request
-    ) {
-        Shipment shipment = shipmentService.findShipmentEntityById(shipmentId);
-
-        markShipmentAsInTransitIfRequired(shipment);
-
-        double nextLatitude = generateNextCoordinate(request.getCurrentLatitude());
-        double nextLongitude = generateNextCoordinate(request.getCurrentLongitude());
-        double speed = request.getSpeed() != null ? request.getSpeed() : generateRandomSpeed();
-
-        ConditionStatus conditionStatus = determineConditionStatus(speed);
-
-        updateShipmentStatusBasedOnCondition(shipmentId, conditionStatus);
-
-        TrackingEventResponse trackingEventResponse = createTrackingEvent(
-                shipmentId,
-                nextLatitude,
-                nextLongitude,
-                speed,
-                conditionStatus
-        );
-
-        return trackingEventResponse;
-    }
-
-    @Transactional
-    public SimulationSessionResponse startSimulationSession(
-            Long shipmentId,
-            StartSimulationSessionRequest request,
-            String createdBy
-    ) {
-        Shipment shipment = shipmentService.findShipmentEntityById(shipmentId);
-        validateShipmentCanBeSimulated(shipment);
-        ensureNoOpenSession(shipmentId);
-
-        double[] initialPosition = resolveInitialPosition(shipment);
-
-        SimulationSession simulationSession = new SimulationSession();
-        simulationSession.setShipment(shipment);
-        simulationSession.setStatus(SimulationSessionStatus.ACTIVE);
-        simulationSession.setIntervalSeconds(resolveIntervalSeconds(request.getIntervalSeconds()));
-        simulationSession.setSpeed(resolveSpeed(request.getSpeed()));
-        simulationSession.setConditionStatus(request.getConditionStatus());
-        simulationSession.setCurrentLatitude(initialPosition[0]);
-        simulationSession.setCurrentLongitude(initialPosition[1]);
-        simulationSession.setGeneratedEvents(0);
-        simulationSession.setMaxEvents(resolveMaxEvents(request.getMaxEvents()));
-        simulationSession.setCreatedBy(createdBy);
-        simulationSession.setNextRunAt(LocalDateTime.now());
-
-        SimulationSession savedSession = simulationSessionRepository.save(simulationSession);
-        processSession(savedSession, LocalDateTime.now());
-
-        return mapToResponse(savedSession);
+        this.defaultMaxEvents = clamp(defaultMaxEvents, MIN_MAX_EVENTS, MAX_MAX_EVENTS);
     }
 
     @Transactional(readOnly = true)
@@ -167,48 +109,17 @@ public class SimulationService {
                 .toList();
     }
 
-    @Transactional
-    public SimulationSessionResponse pauseSimulationSession(Long sessionId) {
-        SimulationSession session = findSimulationSession(sessionId);
-
-        if (session.getStatus() != SimulationSessionStatus.ACTIVE) {
-            throw new BadRequestException("Only active simulation sessions can be paused.");
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void createSessionAfterShipmentCreated(ShipmentCreatedEvent event) {
+        if (!schedulerEnabled) {
+            return;
         }
 
-        session.setStatus(SimulationSessionStatus.PAUSED);
-        session.setNextRunAt(null);
+        Shipment shipment = shipmentService.findShipmentEntityById(event.shipmentId());
+        List<SimulationProfile> profiles = loadActiveProfiles();
 
-        return mapToResponse(simulationSessionRepository.save(session));
-    }
-
-    @Transactional
-    public SimulationSessionResponse resumeSimulationSession(Long sessionId) {
-        SimulationSession session = findSimulationSession(sessionId);
-
-        if (session.getStatus() != SimulationSessionStatus.PAUSED) {
-            throw new BadRequestException("Only paused simulation sessions can be resumed.");
-        }
-
-        validateShipmentCanBeSimulated(session.getShipment());
-        session.setStatus(SimulationSessionStatus.ACTIVE);
-        session.setNextRunAt(LocalDateTime.now());
-
-        return mapToResponse(simulationSessionRepository.save(session));
-    }
-
-    @Transactional
-    public SimulationSessionResponse stopSimulationSession(Long sessionId) {
-        SimulationSession session = findSimulationSession(sessionId);
-
-        if (session.getStatus() == SimulationSessionStatus.STOPPED
-                || session.getStatus() == SimulationSessionStatus.COMPLETED) {
-            return mapToResponse(session);
-        }
-
-        session.setStatus(SimulationSessionStatus.STOPPED);
-        session.setNextRunAt(null);
-
-        return mapToResponse(simulationSessionRepository.save(session));
+        createSystemSessionIfMissing(shipment, LocalDateTime.now(), profiles);
     }
 
     @Scheduled(fixedDelayString = "${app.simulation.scheduler-delay-ms:5000}")
@@ -219,22 +130,195 @@ public class SimulationService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        List<SimulationProfile> profiles = loadActiveProfiles();
+
+        if (profiles.isEmpty()) {
+            return;
+        }
+
+        provisionMissingSystemSessions(now, profiles);
 
         simulationSessionRepository
                 .findByStatusAndNextRunAtLessThanEqualOrderByNextRunAtAsc(
                         SimulationSessionStatus.ACTIVE,
                         now
                 )
-                .forEach(session -> processSession(session, now));
+                .forEach(session -> processSession(session, now, profiles));
+    }
+
+    private List<SimulationProfile> loadActiveProfiles() {
+        return simulationProfileRepository.findByActiveTrueOrderBySortOrderAscDisplayNameAsc();
+    }
+
+    private void provisionMissingSystemSessions(
+            LocalDateTime now,
+            List<SimulationProfile> profiles
+    ) {
+        shipmentRepository
+                .findShipmentsWithoutOpenSimulationSession(
+                        SYSTEM_SIMULATED_SHIPMENT_STATUSES,
+                        OPEN_SESSION_STATUSES
+                )
+                .forEach(shipment -> createSystemSessionIfMissing(shipment, now, profiles));
+    }
+
+    private Optional<SimulationSession> createSystemSessionIfMissing(
+            Shipment shipment,
+            LocalDateTime now,
+            List<SimulationProfile> profiles
+    ) {
+        if (profiles.isEmpty() || !canRunSystemSimulation(shipment)) {
+            return Optional.empty();
+        }
+
+        Optional<SimulationSession> existingSession =
+                simulationSessionRepository.findFirstByShipmentIdAndStatusInOrderByCreatedAtDesc(
+                        shipment.getId(),
+                        OPEN_SESSION_STATUSES
+                );
+
+        if (existingSession.isPresent()) {
+            return Optional.empty();
+        }
+
+        SimulationProfile profile = selectProfile(profiles);
+        double speed = generateSpeed(profile);
+        double[] initialPosition = resolveInitialPosition(shipment);
+
+        SimulationSession simulationSession = new SimulationSession();
+        simulationSession.setShipment(shipment);
+        simulationSession.setStatus(SimulationSessionStatus.ACTIVE);
+        simulationSession.setIntervalSeconds(defaultIntervalSeconds);
+        simulationSession.setSpeed(speed);
+        simulationSession.setConditionStatus(profile.getConditionStatus());
+        simulationSession.setCurrentLatitude(initialPosition[0]);
+        simulationSession.setCurrentLongitude(initialPosition[1]);
+        simulationSession.setNextRunAt(now);
+        simulationSession.setLastRunAt(null);
+        simulationSession.setGeneratedEvents(0);
+        simulationSession.setMaxEvents(defaultMaxEvents);
+        simulationSession.setCreatedBy(SYSTEM_ACTOR);
+        simulationSession.setSystemManaged(true);
+        simulationSession.setLastProfileKey(profile.getProfileKey());
+        simulationSession.setLastProfileName(profile.getDisplayName());
+
+        return Optional.of(simulationSessionRepository.save(simulationSession));
+    }
+
+    private void processSession(
+            SimulationSession session,
+            LocalDateTime now,
+            List<SimulationProfile> profiles
+    ) {
+        if (session.getStatus() != SimulationSessionStatus.ACTIVE
+                || !canRunSystemSimulation(session.getShipment())) {
+            completeSession(session, now);
+            return;
+        }
+
+        Shipment shipment = session.getShipment();
+        markShipmentAsInTransitIfRequired(shipment);
+
+        SimulationProfile profile = selectProfile(profiles);
+        ConditionStatus conditionStatus = profile.getConditionStatus();
+        double speed = generateSpeed(profile);
+        double[] nextPosition = calculateNextPosition(session, shipment, profile, speed);
+
+        TrackingEventResponse trackingEvent = createTrackingEvent(
+                shipment.getId(),
+                nextPosition[0],
+                nextPosition[1],
+                speed,
+                conditionStatus
+        );
+
+        session.setSpeed(speed);
+        session.setConditionStatus(conditionStatus);
+        session.setLastProfileKey(profile.getProfileKey());
+        session.setLastProfileName(profile.getDisplayName());
+        session.setCurrentLatitude(trackingEvent.getLatitude());
+        session.setCurrentLongitude(trackingEvent.getLongitude());
+        session.setLastRunAt(now);
+        session.setGeneratedEvents(resolveGeneratedEvents(session) + 1);
+
+        boolean reachedDestination = hasReachedDestination(session, shipment);
+
+        if (reachedDestination) {
+            markShipmentArrived(shipment);
+            completeSession(session, now);
+            return;
+        }
+
+        updateShipmentStatusBasedOnCondition(shipment, conditionStatus);
+
+        if (hasReachedMaxEvents(session)) {
+            completeSession(session, now);
+            return;
+        }
+
+        session.setNextRunAt(now.plusSeconds(resolveIntervalSeconds(session)));
+        simulationSessionRepository.save(session);
+    }
+
+    private boolean canRunSystemSimulation(Shipment shipment) {
+        return SYSTEM_SIMULATED_SHIPMENT_STATUSES.contains(shipment.getStatus())
+                && hasRouteCoordinates(shipment);
+    }
+
+    private boolean hasRouteCoordinates(Shipment shipment) {
+        return shipment.getOriginLatitude() != null
+                && shipment.getOriginLongitude() != null
+                && shipment.getDestinationLatitude() != null
+                && shipment.getDestinationLongitude() != null;
     }
 
     private void markShipmentAsInTransitIfRequired(Shipment shipment) {
         if (shipment.getStatus() == ShipmentStatus.CREATED
                 || shipment.getStatus() == ShipmentStatus.READY_FOR_DISPATCH
                 || shipment.getStatus() == ShipmentStatus.PICKED_UP) {
-            shipment.setStatus(ShipmentStatus.IN_TRANSIT);
-            shipment.setCurrentStage(LogisticsStage.IN_TRANSIT);
-            shipmentService.saveShipmentEntity(shipment);
+            shipmentService.updateSystemStatus(
+                    shipment,
+                    ShipmentStatus.IN_TRANSIT,
+                    LogisticsStage.IN_TRANSIT,
+                    ShipmentEventSourceType.IOT_SIMULATION,
+                    "System simulation started in-transit tracking."
+            );
+        }
+    }
+
+    private void updateShipmentStatusBasedOnCondition(
+            Shipment shipment,
+            ConditionStatus conditionStatus
+    ) {
+        if (shipment.getStatus() == ShipmentStatus.DELIVERED
+                || shipment.getStatus() == ShipmentStatus.CANCELLED
+                || shipment.getStatus() == ShipmentStatus.ARRIVED) {
+            return;
+        }
+
+        if (conditionStatus == ConditionStatus.DELAYED
+                || conditionStatus == ConditionStatus.IDLE
+                || conditionStatus == ConditionStatus.ROUTE_DEVIATION
+                || conditionStatus == ConditionStatus.SENSOR_WARNING) {
+            shipmentService.updateSystemStatus(
+                    shipment,
+                    ShipmentStatus.DELAYED,
+                    LogisticsStage.IN_TRANSIT,
+                    ShipmentEventSourceType.IOT_SIMULATION,
+                    "System simulation detected a delayed operating condition."
+            );
+            return;
+        }
+
+        if (conditionStatus == ConditionStatus.NORMAL
+                && shipment.getStatus() == ShipmentStatus.DELAYED) {
+            shipmentService.updateSystemStatus(
+                    shipment,
+                    ShipmentStatus.IN_TRANSIT,
+                    LogisticsStage.IN_TRANSIT,
+                    ShipmentEventSourceType.IOT_SIMULATION,
+                    "System simulation detected that normal transit resumed."
+            );
         }
     }
 
@@ -251,98 +335,54 @@ public class SimulationService {
         trackingRequest.setSpeed(speed);
         trackingRequest.setConditionStatus(conditionStatus);
 
-        return trackingEventService.createTrackingEvent(shipmentId, trackingRequest);
+        return trackingEventService.createSystemTrackingEvent(
+                shipmentId,
+                trackingRequest,
+                ShipmentEventSourceType.IOT_SIMULATION
+        );
     }
 
-    private double generateNextCoordinate(Double currentCoordinate) {
-        double movementOffset = ThreadLocalRandom.current().nextDouble(0.001, 0.006);
-        return currentCoordinate + movementOffset;
+    private SimulationProfile selectProfile(List<SimulationProfile> profiles) {
+        int totalWeight = profiles.stream()
+                .mapToInt(this::resolveWeight)
+                .sum();
+
+        if (totalWeight <= 0) {
+            return profiles.getFirst();
+        }
+
+        int ticket = ThreadLocalRandom.current().nextInt(totalWeight);
+
+        for (SimulationProfile profile : profiles) {
+            int weight = resolveWeight(profile);
+
+            if (ticket < weight) {
+                return profile;
+            }
+
+            ticket -= weight;
+        }
+
+        return profiles.getLast();
     }
 
-    private double generateRandomSpeed() {
-        return ThreadLocalRandom.current().nextDouble(20.0, 90.0);
+    private double generateSpeed(SimulationProfile profile) {
+        double minSpeed = Math.max(0.0, resolveSpeed(profile.getMinSpeed(), 0.0));
+        double maxSpeed = Math.max(minSpeed, resolveSpeed(profile.getMaxSpeed(), minSpeed));
+
+        if (maxSpeed == minSpeed) {
+            return roundToOneDecimal(minSpeed);
+        }
+
+        return roundToOneDecimal(ThreadLocalRandom.current().nextDouble(minSpeed, maxSpeed));
     }
 
-    private ConditionStatus determineConditionStatus(double speed) {
-        if (speed <= 1.0) {
-            return ConditionStatus.IDLE;
-        }
-
-        if (speed < 15.0) {
-            return ConditionStatus.DELAYED;
-        }
-
-        return ConditionStatus.NORMAL;
+    private int resolveWeight(SimulationProfile profile) {
+        return Math.max(profile.getWeight() == null ? 0 : profile.getWeight(), 0);
     }
 
-    private void updateShipmentStatusBasedOnCondition(
-            Long shipmentId,
-            ConditionStatus conditionStatus
-    ) {
-        Shipment shipment = shipmentService.findShipmentEntityById(shipmentId);
-
-        if (conditionStatus == ConditionStatus.DELAYED
-                || conditionStatus == ConditionStatus.IDLE
-                || conditionStatus == ConditionStatus.ROUTE_DEVIATION) {
-            shipment.setStatus(ShipmentStatus.DELAYED);
-            shipmentService.saveShipmentEntity(shipment);
-            return;
-        }
-
-        if (conditionStatus == ConditionStatus.NORMAL
-                && shipment.getStatus() == ShipmentStatus.DELAYED) {
-            shipment.setStatus(ShipmentStatus.IN_TRANSIT);
-            shipmentService.saveShipmentEntity(shipment);
-        }
-    }
-
-    private void validateShipmentCanBeSimulated(Shipment shipment) {
-        if (shipment.getStatus() == ShipmentStatus.DELIVERED
-                || shipment.getStatus() == ShipmentStatus.CANCELLED
-                || shipment.getStatus() == ShipmentStatus.ARRIVED) {
-            throw new BadRequestException(
-                    "Simulation can only run for shipments that have not arrived, "
-                            + "been delivered, or been cancelled."
-            );
-        }
-
-        if (shipment.getStatus() == ShipmentStatus.CREATED
-                || shipment.getStatus() == ShipmentStatus.READY_FOR_DISPATCH) {
-            throw new BadRequestException(
-                    "Simulation can only start after the shipment is picked up "
-                            + "or already in transit."
-            );
-        }
-
-        if (shipment.getOriginLatitude() == null
-                || shipment.getOriginLongitude() == null
-                || shipment.getDestinationLatitude() == null
-                || shipment.getDestinationLongitude() == null) {
-            throw new BadRequestException(
-                    "Shipment must have complete origin and destination coordinates "
-                            + "before simulation can start."
-            );
-        }
-    }
-
-    private void ensureNoOpenSession(Long shipmentId) {
-        simulationSessionRepository
-                .findFirstByShipmentIdAndStatusInOrderByCreatedAtDesc(
-                        shipmentId,
-                        OPEN_SESSION_STATUSES
-                )
-                .ifPresent(session -> {
-                    throw new BadRequestException(
-                            "This shipment already has an active or paused simulation session."
-                    );
-                });
-    }
-
-    private SimulationSession findSimulationSession(Long sessionId) {
-        return simulationSessionRepository.findById(sessionId)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Simulation session not found with id: " + sessionId
-                ));
+    private double resolveSpeed(Double value, double fallback) {
+        return value == null ? fallback : value;
     }
 
     private double[] resolveInitialPosition(Shipment shipment) {
@@ -363,63 +403,11 @@ public class SimulationService {
                 });
     }
 
-    private void processSession(SimulationSession session, LocalDateTime now) {
-        if (session.getStatus() != SimulationSessionStatus.ACTIVE) {
-            return;
-        }
-
-        Shipment shipment = session.getShipment();
-
-        if (shipment.getStatus() == ShipmentStatus.DELIVERED
-                || shipment.getStatus() == ShipmentStatus.CANCELLED) {
-            completeSession(session, now);
-            return;
-        }
-
-        markShipmentAsInTransitIfRequired(shipment);
-
-        ConditionStatus conditionStatus = resolveConditionStatusForSession(session);
-        double[] nextPosition = calculateNextPosition(session, shipment, conditionStatus);
-
-        TrackingEventResponse trackingEvent = createTrackingEvent(
-                shipment.getId(),
-                nextPosition[0],
-                nextPosition[1],
-                session.getSpeed(),
-                conditionStatus
-        );
-
-        session.setCurrentLatitude(trackingEvent.getLatitude());
-        session.setCurrentLongitude(trackingEvent.getLongitude());
-        session.setLastRunAt(now);
-        session.setGeneratedEvents(session.getGeneratedEvents() + 1);
-
-        if (hasReachedDestination(session, shipment)
-                || hasReachedMaxEvents(session)) {
-            if (hasReachedDestination(session, shipment)) {
-                markShipmentArrived(shipment);
-            }
-
-            completeSession(session, now);
-            return;
-        }
-
-        session.setNextRunAt(now.plusSeconds(session.getIntervalSeconds()));
-        simulationSessionRepository.save(session);
-    }
-
-    private ConditionStatus resolveConditionStatusForSession(SimulationSession session) {
-        if (session.getConditionStatus() != null) {
-            return session.getConditionStatus();
-        }
-
-        return determineConditionStatus(session.getSpeed());
-    }
-
     private double[] calculateNextPosition(
             SimulationSession session,
             Shipment shipment,
-            ConditionStatus conditionStatus
+            SimulationProfile profile,
+            double speed
     ) {
         double currentLatitude = session.getCurrentLatitude();
         double currentLongitude = session.getCurrentLongitude();
@@ -436,7 +424,11 @@ public class SimulationService {
             return new double[] { destinationLatitude, destinationLongitude };
         }
 
-        double travelDistanceKm = resolveTravelDistanceKm(session, conditionStatus);
+        double travelDistanceKm = resolveTravelDistanceKm(
+                speed,
+                resolveIntervalSeconds(session),
+                profile.getConditionStatus()
+        );
 
         if (travelDistanceKm <= 0.0) {
             return new double[] { currentLatitude, currentLongitude };
@@ -448,22 +440,23 @@ public class SimulationService {
         double nextLongitude =
                 currentLongitude + ((destinationLongitude - currentLongitude) * progressRatio);
 
-        if (conditionStatus == ConditionStatus.ROUTE_DEVIATION) {
-            nextLatitude += ROUTE_DEVIATION_LATITUDE_OFFSET;
+        if (Boolean.TRUE.equals(profile.getRouteDeviationEnabled())) {
+            nextLatitude += resolveSpeed(profile.getRouteDeviationLatitudeOffset(), 0.0);
         }
 
         return new double[] { nextLatitude, nextLongitude };
     }
 
     private double resolveTravelDistanceKm(
-            SimulationSession session,
+            double speed,
+            int intervalSeconds,
             ConditionStatus conditionStatus
     ) {
-        if (conditionStatus == ConditionStatus.IDLE || session.getSpeed() <= 0.0) {
+        if (conditionStatus == ConditionStatus.IDLE || speed <= 0.0) {
             return 0.0;
         }
 
-        return session.getSpeed() * session.getIntervalSeconds() / 3600.0;
+        return speed * intervalSeconds / 3600.0;
     }
 
     private boolean hasReachedDestination(SimulationSession session, Shipment shipment) {
@@ -479,19 +472,29 @@ public class SimulationService {
 
     private boolean hasReachedMaxEvents(SimulationSession session) {
         return session.getMaxEvents() != null
-                && session.getGeneratedEvents() >= session.getMaxEvents();
+                && resolveGeneratedEvents(session) >= session.getMaxEvents();
+    }
+
+    private int resolveGeneratedEvents(SimulationSession session) {
+        return session.getGeneratedEvents() == null ? 0 : session.getGeneratedEvents();
+    }
+
+    private int resolveIntervalSeconds(SimulationSession session) {
+        if (session.getIntervalSeconds() == null) {
+            return defaultIntervalSeconds;
+        }
+
+        return clamp(session.getIntervalSeconds(), MIN_INTERVAL_SECONDS, MAX_INTERVAL_SECONDS);
     }
 
     private void markShipmentArrived(Shipment shipment) {
-        if (shipment.getStatus() == ShipmentStatus.DELIVERED
-                || shipment.getStatus() == ShipmentStatus.CANCELLED
-                || shipment.getStatus() == ShipmentStatus.ARRIVED) {
-            return;
-        }
-
-        shipment.setStatus(ShipmentStatus.ARRIVED);
-        shipment.setCurrentStage(LogisticsStage.ARRIVED_AT_DEALERSHIP);
-        shipmentService.saveShipmentEntity(shipment);
+        shipmentService.updateSystemStatus(
+                shipment,
+                ShipmentStatus.ARRIVED,
+                LogisticsStage.ARRIVED_AT_DEALERSHIP,
+                ShipmentEventSourceType.IOT_SIMULATION,
+                "System simulation detected arrival at the dealership."
+        );
     }
 
     private void completeSession(SimulationSession session, LocalDateTime now) {
@@ -499,50 +502,6 @@ public class SimulationService {
         session.setLastRunAt(now);
         session.setNextRunAt(null);
         simulationSessionRepository.save(session);
-    }
-
-    private int resolveIntervalSeconds(Integer intervalSeconds) {
-        if (intervalSeconds < MIN_INTERVAL_SECONDS || intervalSeconds > MAX_INTERVAL_SECONDS) {
-            throw new BadRequestException(
-                    "Simulation interval must be between "
-                            + MIN_INTERVAL_SECONDS
-                            + " and "
-                            + MAX_INTERVAL_SECONDS
-                            + " seconds."
-            );
-        }
-
-        return intervalSeconds;
-    }
-
-    private double resolveSpeed(Double speed) {
-        if (speed < MIN_SPEED_KMH || speed > MAX_SPEED_KMH) {
-            throw new BadRequestException(
-                    "Simulation speed must be between "
-                            + MIN_SPEED_KMH
-                            + " and "
-                            + MAX_SPEED_KMH
-                            + " km/h."
-            );
-        }
-
-        return speed;
-    }
-
-    private Integer resolveMaxEvents(Integer maxEvents) {
-        if (maxEvents == null) {
-            return null;
-        }
-
-        if (maxEvents < 1 || maxEvents > MAX_GENERATED_EVENTS) {
-            throw new BadRequestException(
-                    "Maximum generated events must be between 1 and "
-                            + MAX_GENERATED_EVENTS
-                            + "."
-            );
-        }
-
-        return maxEvents;
     }
 
     private boolean hasTrackingCoordinates(TrackingEvent trackingEvent) {
@@ -572,15 +531,19 @@ public class SimulationService {
                 shipment.getDestination(),
                 shipment.getDealershipName(),
                 session.getCreatedBy(),
+                session.getSystemManaged(),
+                session.getLastProfileKey(),
+                session.getLastProfileName(),
                 session.getCreatedAt(),
                 session.getUpdatedAt()
         );
     }
 
-    private String formatEnumLabel(String value) {
-        return Arrays.stream(value.toLowerCase(Locale.ROOT).split("_"))
-                .map(word -> word.substring(0, 1).toUpperCase(Locale.ROOT) + word.substring(1))
-                .reduce((left, right) -> left + " " + right)
-                .orElse(value);
+    private int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private double roundToOneDecimal(double value) {
+        return Math.round(value * 10.0) / 10.0;
     }
 }

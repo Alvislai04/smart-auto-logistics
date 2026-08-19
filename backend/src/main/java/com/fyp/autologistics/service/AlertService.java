@@ -2,13 +2,19 @@ package com.fyp.autologistics.service;
 
 import com.fyp.autologistics.dto.AlertResponse;
 import com.fyp.autologistics.entity.Alert;
+import com.fyp.autologistics.entity.AppUser;
 import com.fyp.autologistics.entity.Shipment;
+import com.fyp.autologistics.entity.StockAlertRule;
 import com.fyp.autologistics.entity.TrackingEvent;
+import com.fyp.autologistics.enums.AlertReferenceType;
 import com.fyp.autologistics.enums.AlertSeverity;
 import com.fyp.autologistics.enums.AlertStatus;
 import com.fyp.autologistics.enums.AlertType;
 import com.fyp.autologistics.enums.ConditionStatus;
+import com.fyp.autologistics.enums.ShipmentEventSourceType;
 import com.fyp.autologistics.enums.ShipmentStatus;
+import com.fyp.autologistics.enums.UserRole;
+import com.fyp.autologistics.exception.BadRequestException;
 import com.fyp.autologistics.exception.ResourceNotFoundException;
 import com.fyp.autologistics.repository.AlertRepository;
 import com.fyp.autologistics.enums.ShipmentEventType;
@@ -16,6 +22,9 @@ import com.fyp.autologistics.repository.ShipmentRepository;
 import com.fyp.autologistics.repository.TrackingEventRepository;
 import com.fyp.autologistics.util.GeoDistanceUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.data.domain.Pageable;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -32,6 +41,10 @@ public class AlertService {
     private static final double PROGRESS_SHORTFALL_TOLERANCE = 0.20;
     private static final double MIN_EXPECTED_PROGRESS_FOR_SHORTFALL_ALERT = 0.25;
     private static final long MISSING_UPDATE_THRESHOLD_MINUTES = 30;
+    private static final List<AlertStatus> ACTIVE_ALERT_STATUSES = List.of(
+            AlertStatus.OPEN,
+            AlertStatus.ACKNOWLEDGED
+    );
 
     private static final Set<ShipmentStatus> MONITORED_STATUSES = Set.of(
             ShipmentStatus.CREATED,
@@ -47,21 +60,25 @@ public class AlertService {
     private final TrackingEventRepository trackingEventRepository;
     private final ShipmentService shipmentService;
     private final ShipmentEventService shipmentEventService;
+    private final AuthenticatedUserService authenticatedUserService;
 
     public AlertService(
             AlertRepository alertRepository,
             ShipmentRepository shipmentRepository,
             TrackingEventRepository trackingEventRepository,
             ShipmentService shipmentService,
-            ShipmentEventService shipmentEventService
+            ShipmentEventService shipmentEventService,
+            AuthenticatedUserService authenticatedUserService
     ) {
         this.alertRepository = alertRepository;
         this.shipmentRepository = shipmentRepository;
         this.trackingEventRepository = trackingEventRepository;
         this.shipmentService = shipmentService;
         this.shipmentEventService = shipmentEventService;
+        this.authenticatedUserService = authenticatedUserService;
     }
 
+    @Transactional
     public AlertResponse createAlertIfNotOpen(
             Long shipmentId,
             AlertType alertType,
@@ -96,10 +113,89 @@ public class AlertService {
                 ShipmentEventType.ALERT_CREATED,
                 "Alert created: " + title,
                 null,
-                null
+                null,
+                null,
+                ShipmentEventSourceType.ALERT_ENGINE
         );
 
         return mapToResponse(savedAlert);
+    }
+
+    @Transactional
+    public AlertResponse createOrderUpdateAlert(
+            Long shipmentId,
+            ShipmentStatus previousStatus,
+            ShipmentStatus currentStatus,
+            ShipmentEventSourceType sourceType
+    ) {
+        Shipment shipment = shipmentService.findShipmentEntityById(shipmentId);
+        resolveActiveAlerts(
+                alertRepository.findByShipmentIdAndAlertTypeAndStatusInOrderByCreatedAtDesc(
+                        shipmentId,
+                        AlertType.ORDER_UPDATE,
+                        ACTIVE_ALERT_STATUSES
+                )
+        );
+
+        Alert alert = new Alert();
+        alert.setShipment(shipment);
+        alert.setAlertType(AlertType.ORDER_UPDATE);
+        alert.setSeverity(resolveOrderUpdateSeverity(currentStatus));
+        alert.setStatus(AlertStatus.OPEN);
+        alert.setTitle("Shipment order updated");
+        alert.setMessage(
+                shipment.getShipmentCode()
+                        + " changed from "
+                        + formatEnumLabel(previousStatus.name())
+                        + " to "
+                        + formatEnumLabel(currentStatus.name())
+                        + ". Source: "
+                        + formatEnumLabel(sourceType.name())
+                        + "."
+        );
+
+        return mapToResponse(alertRepository.save(alert));
+    }
+
+    @Transactional
+    public void synchronizeLowStockAlert(StockAlertRule rule, long currentQuantity) {
+        List<Alert> activeAlerts = alertRepository
+                .findByStockAlertRuleIdAndAlertTypeAndStatusInOrderByCreatedAtDesc(
+                        rule.getId(),
+                        AlertType.LOW_STOCK,
+                        ACTIVE_ALERT_STATUSES
+                );
+
+        boolean lowStock = rule.isActive() && currentQuantity < rule.getMinimumQuantity();
+
+        if (!lowStock) {
+            resolveActiveAlerts(activeAlerts);
+            return;
+        }
+
+        String title = "Low stock: " + rule.getVehicleModel().getDisplayName();
+        String message = buildLowStockMessage(rule, currentQuantity);
+        AlertSeverity severity = currentQuantity == 0
+                ? AlertSeverity.HIGH
+                : AlertSeverity.MEDIUM;
+
+        if (!activeAlerts.isEmpty()) {
+            Alert activeAlert = activeAlerts.getFirst();
+            activeAlert.setSeverity(severity);
+            activeAlert.setTitle(title);
+            activeAlert.setMessage(message);
+            alertRepository.save(activeAlert);
+            return;
+        }
+
+        Alert alert = new Alert();
+        alert.setStockAlertRule(rule);
+        alert.setAlertType(AlertType.LOW_STOCK);
+        alert.setSeverity(severity);
+        alert.setStatus(AlertStatus.OPEN);
+        alert.setTitle(title);
+        alert.setMessage(message);
+        alertRepository.save(alert);
     }
 
     public void evaluateAllActiveShipmentAlerts() {
@@ -132,16 +228,32 @@ public class AlertService {
         evaluateProgressShortfall(shipment, latestTrackingEvent);
     }
 
-    public List<AlertResponse> getAllOpenAlerts() {
-        return alertRepository.findByStatusOrderByCreatedAtDesc(AlertStatus.OPEN)
+    @Transactional(readOnly = true)
+    public List<AlertResponse> getOpenAlerts(String email) {
+        AppUser user = authenticatedUserService.getAuthenticatedUser(email);
+
+        return findOpenAlertsForUser(user)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
     }
 
-    public List<AlertResponse> getAlertsByShipmentId(Long shipmentId) {
-        shipmentService.findShipmentEntityById(shipmentId);
-        evaluateShipmentMonitoringRules(shipmentId);
+    @Transactional(readOnly = true)
+    public long countOpenAlerts(String email) {
+        AppUser user = authenticatedUserService.getAuthenticatedUser(email);
+        return countOpenAlertsForUser(user);
+    }
+
+    @Transactional
+    public List<AlertResponse> getAlertsByShipmentId(Long shipmentId, String email) {
+        AppUser user = authenticatedUserService.getAuthenticatedUser(email);
+        Shipment shipment = shipmentService.findShipmentEntityById(shipmentId);
+
+        if (!canViewShipmentAlerts(user, shipment)) {
+            return List.of();
+        }
+
+        evaluateShipmentMonitoringRules(shipment);
 
         return alertRepository.findByShipmentIdOrderByCreatedAtDesc(shipmentId)
                 .stream()
@@ -377,8 +489,11 @@ public class AlertService {
         markShipmentDelayedIfActive(shipment);
     }
 
-    public AlertResponse acknowledgeAlert(Long alertId) {
+    @Transactional
+    public AlertResponse acknowledgeAlert(Long alertId, String email) {
+        AppUser user = authenticatedUserService.getAuthenticatedUser(email);
         Alert alert = findAlertEntityById(alertId);
+        validateUserCanAcknowledgeAlert(user, alert);
 
         if (alert.getStatus() == AlertStatus.RESOLVED) {
             return mapToResponse(alert);
@@ -391,8 +506,11 @@ public class AlertService {
         return mapToResponse(savedAlert);
     }
 
-    public AlertResponse resolveAlert(Long alertId) {
+    @Transactional
+    public AlertResponse resolveAlert(Long alertId, String email) {
+        AppUser user = authenticatedUserService.getAuthenticatedUser(email);
         Alert alert = findAlertEntityById(alertId);
+        validateUserCanResolveAlert(user, alert);
 
         alert.setStatus(AlertStatus.RESOLVED);
         alert.setResolvedAt(LocalDateTime.now());
@@ -446,7 +564,9 @@ public class AlertService {
                 eventType,
                 description,
                 null,
-                null
+                null,
+                null,
+                ShipmentEventSourceType.ALERT_ENGINE
         );
     }
 
@@ -502,8 +622,13 @@ public class AlertService {
             return;
         }
 
-        shipment.setStatus(ShipmentStatus.DELAYED);
-        shipmentService.saveShipmentEntity(shipment);
+        shipmentService.updateSystemStatus(
+                shipment,
+                ShipmentStatus.DELAYED,
+                shipment.getCurrentStage(),
+                ShipmentEventSourceType.ALERT_ENGINE,
+                "Monitoring rules marked the shipment as delayed."
+        );
     }
 
     private String formatPercentage(double value) {
@@ -518,16 +643,168 @@ public class AlertService {
         return Math.max(min, Math.min(max, value));
     }
 
+    private List<Alert> findOpenAlertsForUser(AppUser user) {
+        if (user.getRole() == UserRole.MANUFACTURER) {
+            String partyProfileKey = user.getPartyProfileKey();
+            return StringUtils.hasText(partyProfileKey)
+                    ? alertRepository.findVisibleToManufacturer(
+                            AlertStatus.OPEN,
+                            partyProfileKey,
+                            Pageable.unpaged()
+                    )
+                    : List.of();
+        }
+
+        if (user.getRole() == UserRole.DEALERSHIP) {
+            String partyProfileKey = user.getPartyProfileKey();
+            return StringUtils.hasText(partyProfileKey)
+                    ? alertRepository.findVisibleToDealership(
+                            AlertStatus.OPEN,
+                            partyProfileKey,
+                            Pageable.unpaged()
+                    )
+                    : List.of();
+        }
+
+        if (user.getRole() == UserRole.LOGISTICS_PROVIDER) {
+            return alertRepository.findByStatusAndShipmentIsNotNullOrderByCreatedAtDesc(
+                    AlertStatus.OPEN,
+                    Pageable.unpaged()
+            );
+        }
+
+        return alertRepository.findByStatusOrderByCreatedAtDesc(AlertStatus.OPEN);
+    }
+
+    private long countOpenAlertsForUser(AppUser user) {
+        if (user.getRole() == UserRole.MANUFACTURER) {
+            String partyProfileKey = user.getPartyProfileKey();
+            return StringUtils.hasText(partyProfileKey)
+                    ? alertRepository.countVisibleToManufacturer(
+                            AlertStatus.OPEN,
+                            partyProfileKey
+                    )
+                    : 0;
+        }
+
+        if (user.getRole() == UserRole.DEALERSHIP) {
+            String partyProfileKey = user.getPartyProfileKey();
+            return StringUtils.hasText(partyProfileKey)
+                    ? alertRepository.countVisibleToDealership(
+                            AlertStatus.OPEN,
+                            partyProfileKey
+                    )
+                    : 0;
+        }
+
+        if (user.getRole() == UserRole.LOGISTICS_PROVIDER) {
+            return alertRepository.countByStatusAndShipmentIsNotNull(AlertStatus.OPEN);
+        }
+
+        return alertRepository.countByStatus(AlertStatus.OPEN);
+    }
+
+    private void validateUserCanAcknowledgeAlert(AppUser user, Alert alert) {
+        if (user.getRole() == UserRole.ADMIN) {
+            return;
+        }
+
+        if (user.getRole() == UserRole.LOGISTICS_PROVIDER
+                && alert.getShipment() != null) {
+            return;
+        }
+
+        if (user.getRole() == UserRole.DEALERSHIP && canViewAlert(user, alert)) {
+            return;
+        }
+
+        if (user.getRole() == UserRole.MANUFACTURER
+                && (alert.getAlertType() == AlertType.ORDER_UPDATE
+                    || alert.getAlertType() == AlertType.LOW_STOCK)
+                && canViewAlert(user, alert)) {
+            return;
+        }
+
+        throw new BadRequestException("You are not allowed to acknowledge this alert.");
+    }
+
+    private void validateUserCanResolveAlert(AppUser user, Alert alert) {
+        if (user.getRole() == UserRole.ADMIN) {
+            return;
+        }
+
+        if (user.getRole() == UserRole.LOGISTICS_PROVIDER
+                && alert.getShipment() != null) {
+            return;
+        }
+
+        throw new BadRequestException("You are not allowed to resolve this alert.");
+    }
+
+    private boolean canViewShipmentAlerts(AppUser user, Shipment shipment) {
+        if (shipment == null) {
+            return false;
+        }
+
+        if (user.getRole() == UserRole.ADMIN || user.getRole() == UserRole.LOGISTICS_PROVIDER) {
+            return true;
+        }
+
+        String partyProfileKey = user.getPartyProfileKey();
+
+        if (!StringUtils.hasText(partyProfileKey)) {
+            return false;
+        }
+
+        if (user.getRole() == UserRole.MANUFACTURER) {
+            return partyProfileKey.equals(shipment.getManufacturerKey());
+        }
+
+        if (user.getRole() == UserRole.DEALERSHIP) {
+            return partyProfileKey.equals(shipment.getDealershipKey());
+        }
+
+        return false;
+    }
+
+    private boolean canViewAlert(AppUser user, Alert alert) {
+        if (alert.getShipment() != null) {
+            return canViewShipmentAlerts(user, alert.getShipment());
+        }
+
+        if (alert.getStockAlertRule() == null) {
+            return false;
+        }
+
+        return StringUtils.hasText(user.getPartyProfileKey())
+                && user.getPartyProfileKey().equals(
+                        alert.getStockAlertRule().getPartyProfile().getPartyKey()
+                );
+    }
+
     private Alert findAlertEntityById(Long alertId) {
         return alertRepository.findById(alertId)
                 .orElseThrow(() -> new ResourceNotFoundException("Alert not found with id: " + alertId));
     }
 
     private AlertResponse mapToResponse(Alert alert) {
+        Shipment shipment = alert.getShipment();
+        StockAlertRule stockAlertRule = alert.getStockAlertRule();
+        AlertReferenceType referenceType = shipment != null
+                ? AlertReferenceType.SHIPMENT
+                : AlertReferenceType.STOCK_RULE;
+        Long referenceId = shipment != null ? shipment.getId() : stockAlertRule.getId();
+        String referenceLabel = shipment != null
+                ? shipment.getShipmentCode()
+                : stockAlertRule.getRuleKey();
+
         return new AlertResponse(
                 alert.getId(),
-                alert.getShipment().getId(),
-                alert.getShipment().getShipmentCode(),
+                shipment == null ? null : shipment.getId(),
+                shipment == null ? null : shipment.getShipmentCode(),
+                referenceType,
+                referenceId,
+                referenceLabel,
                 alert.getAlertType(),
                 alert.getSeverity(),
                 alert.getStatus(),
@@ -537,5 +814,56 @@ public class AlertService {
                 alert.getAcknowledgedAt(),
                 alert.getResolvedAt()
         );
+    }
+
+    private void resolveActiveAlerts(List<Alert> activeAlerts) {
+        if (activeAlerts.isEmpty()) {
+            return;
+        }
+
+        LocalDateTime resolvedAt = LocalDateTime.now();
+        activeAlerts.forEach(alert -> {
+            alert.setStatus(AlertStatus.RESOLVED);
+            alert.setResolvedAt(resolvedAt);
+        });
+        alertRepository.saveAll(activeAlerts);
+    }
+
+    private String buildLowStockMessage(StockAlertRule rule, long currentQuantity) {
+        return rule.getPartyProfile().getCompanyName()
+                + " has "
+                + currentQuantity
+                + " vehicle(s) for "
+                + rule.getVehicleModel().getDisplayName()
+                + " at "
+                + formatEnumLabel(rule.getLogisticsStage().name())
+                + ". Minimum required: "
+                + rule.getMinimumQuantity()
+                + ".";
+    }
+
+    private AlertSeverity resolveOrderUpdateSeverity(ShipmentStatus currentStatus) {
+        if (currentStatus == ShipmentStatus.DELAYED) {
+            return AlertSeverity.HIGH;
+        }
+
+        if (currentStatus == ShipmentStatus.CANCELLED) {
+            return AlertSeverity.MEDIUM;
+        }
+
+        return AlertSeverity.LOW;
+    }
+
+    private String formatEnumLabel(String value) {
+        String normalized = value.replace('_', ' ').toLowerCase();
+        StringBuilder result = new StringBuilder(normalized.length());
+        boolean capitalizeNext = true;
+
+        for (char character : normalized.toCharArray()) {
+            result.append(capitalizeNext ? Character.toUpperCase(character) : character);
+            capitalizeNext = character == ' ';
+        }
+
+        return result.toString();
     }
 }

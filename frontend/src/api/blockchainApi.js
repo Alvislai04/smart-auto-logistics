@@ -19,4 +19,16 @@ export const blockchainApi = {
     );
     return response.data;
   },
+
+  retryRecord: async (recordId) => {
+    const response = await axiosClient.post(
+      `/blockchain-records/${recordId}/retry`,
+    );
+    return response.data;
+  },
+
+  getHealth: async () => {
+    const response = await axiosClient.get("/blockchain-records/health");
+    return response.data;
+  },
 };

@@ -2,9 +2,11 @@ package com.fyp.autologistics.service;
 
 import com.fyp.autologistics.dto.CreateTrackingEventRequest;
 import com.fyp.autologistics.dto.TrackingEventResponse;
+import com.fyp.autologistics.entity.AppUser;
 import com.fyp.autologistics.entity.Shipment;
 import com.fyp.autologistics.entity.TrackingEvent;
 import com.fyp.autologistics.enums.ConditionStatus;
+import com.fyp.autologistics.enums.ShipmentEventSourceType;
 import com.fyp.autologistics.repository.TrackingEventRepository;
 import com.fyp.autologistics.enums.ShipmentEventType;
 import com.fyp.autologistics.exception.ResourceNotFoundException;
@@ -19,20 +21,51 @@ public class TrackingEventService {
     private final ShipmentService shipmentService;
     private final ShipmentEventService shipmentEventService;
     private final AlertService alertService;
+    private final AuthenticatedUserService authenticatedUserService;
 
     public TrackingEventService(
             TrackingEventRepository trackingEventRepository,
             ShipmentService shipmentService,
             ShipmentEventService shipmentEventService,
-            AlertService alertService
+            AlertService alertService,
+            AuthenticatedUserService authenticatedUserService
     ) {
         this.trackingEventRepository = trackingEventRepository;
         this.shipmentService = shipmentService;
         this.shipmentEventService = shipmentEventService;
         this.alertService = alertService;
+        this.authenticatedUserService = authenticatedUserService;
     }
 
-    public TrackingEventResponse createTrackingEvent(Long shipmentId, CreateTrackingEventRequest request) {
+    public TrackingEventResponse createTrackingEvent(
+            Long shipmentId,
+            CreateTrackingEventRequest request,
+            String actorEmail
+    ) {
+        AppUser actor = authenticatedUserService.getAuthenticatedUser(actorEmail);
+
+        return createTrackingEvent(
+                shipmentId,
+                request,
+                actor,
+                ShipmentEventSourceType.USER_ACTION
+        );
+    }
+
+    public TrackingEventResponse createSystemTrackingEvent(
+            Long shipmentId,
+            CreateTrackingEventRequest request,
+            ShipmentEventSourceType sourceType
+    ) {
+        return createTrackingEvent(shipmentId, request, null, sourceType);
+    }
+
+    private TrackingEventResponse createTrackingEvent(
+            Long shipmentId,
+            CreateTrackingEventRequest request,
+            AppUser actor,
+            ShipmentEventSourceType sourceType
+    ) {
         Shipment shipment = shipmentService.findShipmentEntityById(shipmentId);
 
         TrackingEvent trackingEvent = new TrackingEvent();
@@ -55,7 +88,9 @@ public class TrackingEventService {
                         + savedTrackingEvent.getSpeed()
                         + " km/h.",
                 null,
-                null
+                null,
+                actor,
+                sourceType
         );
 
         alertService.evaluateShipmentMonitoringRules(shipment, savedTrackingEvent);

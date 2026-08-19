@@ -10,5 +10,9 @@ public interface VehicleModelRepository extends JpaRepository<VehicleModel, Long
 
     List<VehicleModel> findByActiveTrueOrderBySortOrderAscDisplayNameAsc();
 
+    List<VehicleModel> findAllByOrderBySortOrderAscDisplayNameAsc();
+
     Optional<VehicleModel> findByModelCodeAndActiveTrue(String modelCode);
+
+    Optional<VehicleModel> findByModelCode(String modelCode);
 }

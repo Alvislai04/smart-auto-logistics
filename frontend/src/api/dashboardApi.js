@@ -1,8 +1,8 @@
 import axiosClient from "./axiosClient";
 
 export const dashboardApi = {
-  getOverview: async () => {
-    const response = await axiosClient.get("/dashboard/overview");
+  getOverview: async (config = {}) => {
+    const response = await axiosClient.get("/dashboard/overview", config);
     return response.data;
   },
 

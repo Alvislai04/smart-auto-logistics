@@ -42,6 +42,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/actuator/health/**").permitAll()
 
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/blockchain-records/shipment/*").authenticated()
@@ -50,14 +51,17 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/shipments").hasRole("MANUFACTURER")
                         .requestMatchers(HttpMethod.PUT, "/api/shipments/*/status").hasAnyRole("ADMIN", "LOGISTICS_PROVIDER")
                         .requestMatchers(HttpMethod.PUT, "/api/shipments/*/receipt-confirmation").hasAnyRole("ADMIN", "LOGISTICS_PROVIDER", "DEALERSHIP")
+                        .requestMatchers(HttpMethod.PUT, "/api/shipments/*").hasAnyRole("ADMIN", "MANUFACTURER")
                         .requestMatchers(HttpMethod.DELETE, "/api/shipments/**").hasRole("ADMIN")
 
                         .requestMatchers(HttpMethod.POST, "/api/shipments/*/tracking-events").hasAnyRole("ADMIN", "LOGISTICS_PROVIDER")
-                        .requestMatchers(HttpMethod.POST, "/api/shipments/*/simulation/**").hasAnyRole("ADMIN", "LOGISTICS_PROVIDER")
-                        .requestMatchers(HttpMethod.GET, "/api/shipments/*/simulation/**").hasAnyRole("ADMIN", "LOGISTICS_PROVIDER")
+                        .requestMatchers(HttpMethod.GET, "/api/shipments/*/simulation/**").authenticated()
                         .requestMatchers("/api/simulation-sessions/**").hasAnyRole("ADMIN", "LOGISTICS_PROVIDER")
 
-                        .requestMatchers(HttpMethod.PUT, "/api/alerts/*/acknowledge").hasAnyRole("ADMIN", "LOGISTICS_PROVIDER", "DEALERSHIP")
+                        .requestMatchers(HttpMethod.GET, "/api/stock-monitoring/**").hasAnyRole("ADMIN", "MANUFACTURER", "DEALERSHIP")
+                        .requestMatchers("/api/stock-monitoring/rules/**").hasRole("ADMIN")
+
+                        .requestMatchers(HttpMethod.PUT, "/api/alerts/*/acknowledge").hasAnyRole("ADMIN", "MANUFACTURER", "LOGISTICS_PROVIDER", "DEALERSHIP")
                         .requestMatchers(HttpMethod.PUT, "/api/alerts/*/resolve").hasAnyRole("ADMIN", "LOGISTICS_PROVIDER")
 
                         .requestMatchers(HttpMethod.GET, "/api/**").authenticated()

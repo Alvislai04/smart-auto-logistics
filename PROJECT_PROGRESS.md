@@ -9,6 +9,7 @@ Legend:
 - `[x]` Completed
 - `[~]` Partially completed or needs improvement
 - `[ ]` Not implemented yet
+- `[-]` Not planned for the current implementation scope
 
 ## 1. Core IR Requirements
 
@@ -34,6 +35,7 @@ Legend:
 - [x] User entity
 - [x] User company/location profile fields for manufacturer and dealership routing
 - [x] Database-backed shipment party profile master data
+- [x] Admin master-data configuration UI for shipment dropdown and simulation data
 - [x] User role enum
 - [x] Admin-created database user accounts
 - [x] Optional first-admin bootstrap configuration
@@ -43,6 +45,7 @@ Legend:
 - [x] JWT authentication filter
 - [x] Frontend login page connected to backend
 - [x] Production-style blank email/password login page
+- [x] Professional operations-console login UI redesign
 - [x] Frontend hardcoded demo login users removed
 - [x] Role shortcut login cards removed
 - [x] Eye-icon password visibility toggle on login
@@ -61,7 +64,7 @@ Legend:
 - [x] User self-service profile update API/UI
 - [x] User self-service password change API/UI
 - [x] Non-admin account profile sync to shipment party profiles
-- [ ] Admin reset user password flow
+- [-] Admin reset user password flow
 
 ## 3. Shipment Management
 
@@ -75,6 +78,7 @@ Legend:
 - [x] Auto-generated unique shipment code
 - [x] Backend-controlled shipment code that users cannot edit from UI
 - [x] Database-backed Mercedes-Benz vehicle model selection by unique model key
+- [x] Admin-managed vehicle model master data
 - [x] View all shipments
 - [x] View shipment by ID
 - [x] Delete shipment
@@ -83,15 +87,16 @@ Legend:
 - [x] Shipment details page
 - [x] Shipment list page
 - [x] Create shipment page
-- [ ] Edit shipment details
+- [x] Edit shipment details
 - [x] Manufacturer origin dropdown from database party profiles by unique key
 - [x] Dealership destination/name dropdown from database party profiles by unique key
+- [x] Admin-managed manufacturer, logistics provider, and dealership party profiles
 - [x] Search shipment list
 - [x] Filter shipment list by status
 - [x] Filter shipment list by logistics stage
 - [x] Pagination for shipment list
 - [x] Better date/time formatting
-- [ ] Confirmation modal before cancelling shipment
+- [-] Confirmation modal before cancelling shipment
 
 ## 4. Shipment Operation Data
 
@@ -115,6 +120,7 @@ Legend:
 - [x] Delivery receipt confirmation timestamp
 - [x] Delivery receipt confirmation user
 - [x] Shipment document attachment metadata
+- [-] Shipment document file upload/download storage
 
 ## 5. IoT Tracking and Simulation
 
@@ -126,8 +132,8 @@ Legend:
 - [x] Create tracking event
 - [x] View tracking history by shipment
 - [x] Latest tracking display
-- [x] Simulate next GPS point
-- [x] Simulate speed
+- [x] System automatically generates GPS points
+- [x] System automatically varies speed
 - [x] Detect normal movement
 - [x] Detect delay from low speed
 - [x] Detect idle condition
@@ -135,10 +141,15 @@ Legend:
 - [x] Route deviation detection logic
 - [x] Missing update detection logic
 - [x] Sensor warning detection logic
-- [x] Continuous simulation start/pause/stop
-- [x] Simulation interval control
-- [x] Database-backed simulation session state
-- [x] Multi-vehicle simulation dashboard
+- [x] User-controlled simulation actions removed from API/UI
+- [x] Database-backed random simulation profile state
+- [x] Admin-managed simulation profile master data
+- [x] Database-backed system-managed simulation session state
+- [x] Automatic session provisioning after shipment creation
+- [x] Scheduler backfill for existing eligible shipments
+- [x] Multi-vehicle simulation monitoring dashboard
+- [-] Detailed simulated sensor fields, such as shock, temperature, humidity,
+  or sensor health
 
 ## 6. Map and Visual Tracking UI
 
@@ -149,8 +160,8 @@ Legend:
 - [x] Empty map state
 - [x] Origin and destination markers
 - [x] Planned route vs actual route display
-- [ ] Route deviation visual warning
-- [ ] Better mobile map controls
+- [-] Route deviation visual warning
+- [-] Better mobile map controls
 
 ## 7. Alerts and Notifications
 
@@ -170,13 +181,31 @@ Legend:
 - [x] Resolve alert
 - [x] Alerts page
 - [x] Alerts inside shipment details page
+- [x] Manufacturer access to scoped full alerts page
+- [x] Role-scoped open alert list and count API
+- [x] Sidebar open-alert notification badge
+- [x] Toast notification after important user actions
 - [x] ETA overdue alert
 - [x] Missing update alert
 - [x] Route deviation alert
 - [x] Sensor warning alert
 - [x] Plan-vs-actual progress shortfall alert
-- [ ] Notification count badge in sidebar/topbar
-- [ ] Toast notification after important user actions
+- [x] Low-stock alert
+- [x] Order update alert
+- [x] Database-backed stock alert rules with generated unique rule keys
+- [x] Unique company/model/stage rule scope enforced by service and database
+- [x] Stock quantity calculated from non-cancelled shipment records
+- [x] Automatic scheduled stock evaluation
+- [x] Immediate stock evaluation after shipment creation/status changes
+- [x] Low-stock alert update without duplicate active alerts
+- [x] Automatic low-stock recovery resolution
+- [x] Order-update alert generated from manual status changes
+- [x] Order-update alert generated from IoT simulation and alert-engine changes
+- [x] Previous active order update resolved when a newer update is generated
+- [x] Stock Monitoring page for admin, manufacturer, and dealership roles
+- [x] Admin-only stock rule create/edit controls
+- [x] Manufacturer/dealership read-only company-scoped stock view
+- [x] Alert links distinguish shipment and stock-rule references
 
 ## 8. Shipment Event Audit Trail
 
@@ -186,6 +215,7 @@ Legend:
 - [x] Shipment event service
 - [x] Shipment event controller
 - [x] Event when shipment is created
+- [x] Event when shipment details are edited
 - [x] Event when status changes
 - [x] Event when tracking updates
 - [x] Event when delay is detected
@@ -194,9 +224,9 @@ Legend:
 - [x] Event when delivery receipt is confirmed
 - [x] Event timeline UI
 - [x] Automatic blockchain recording for important events
-- [ ] Show event actor/user
-- [ ] Show event source type, such as user action or IoT simulation
-- [ ] Export event timeline
+- [x] Show event actor/user
+- [x] Show event source type, such as user action or IoT simulation
+- [-] Export event timeline
 
 ## 9. Blockchain Ledger
 
@@ -219,10 +249,15 @@ Legend:
 - [x] Company notification record for hash mismatch
 - [x] Admin blockchain monitor page
 - [x] Per-shipment blockchain verification panel
-- [ ] Retry failed blockchain record action
-- [ ] Display blockchain contract address in admin monitor
-- [ ] Display chain/network health status
-- [ ] Add backend unit tests with mocked blockchain client
+- [x] Retry failed blockchain record action
+- [x] Prevent retry for records already written on-chain
+- [x] Preserve original stored event hash during retry
+- [x] Persist retry attempt count and last retry time
+- [x] Display blockchain contract address in admin monitor
+- [x] Display RPC, contract, signer, chain, and latest-block health status
+- [x] Disable retry controls until blockchain health is ready
+- [x] Paginate and filter admin blockchain records
+- [x] Add backend unit tests with mocked blockchain client
 
 ## 10. Admin and Company Notifications
 
@@ -235,11 +270,11 @@ Legend:
 - [x] Company notification service
 - [x] Company notification controller
 - [x] Company notification admin UI
-- [ ] Email configuration
-- [ ] Email template for blockchain integrity alert
-- [ ] Send email when blockchain verification fails
-- [ ] Store email delivery status
-- [ ] Manual resend company notification
+- [-] Email configuration
+- [-] Email template for blockchain integrity alert
+- [-] Send email when blockchain verification fails
+- [-] Store email delivery status
+- [-] Manual resend company notification
 
 ## 11. Dashboard and Reporting
 
@@ -259,6 +294,7 @@ Legend:
 - [x] Dedicated logistics provider dashboard route
 - [x] Dedicated dealership dashboard route
 - [x] Dashboard summary cards
+- [x] Dashboard real-time refresh/polling
 - [x] Open alerts panel
 - [x] Shipment performance chart
 - [x] Delay rate chart
@@ -267,7 +303,7 @@ Legend:
 - [x] Delay report page
 - [x] Alert report page
 - [x] Export CSV
-- [ ] Export PDF
+- [-] Export PDF
 
 ## 12. UI and UX Quality
 
@@ -276,18 +312,23 @@ Legend:
 - [x] Role-based navigation
 - [x] Auth screen
 - [x] Normal login screen without demo credentials
-- [x] Terminal-style login screen redesign
+- [x] Professional operations-console login screen redesign
 - [x] Animated logistics map visual on login
-- [x] Ticket-style login panel
+- [x] Production login card layout
 - [x] Login password visibility icon control
 - [x] Login redirects users to their own dashboard first
 - [x] Root path redirects authenticated users to role dashboard
 - [x] Sidebar dashboard link resolves by current role
 - [x] Dashboard page
+- [x] Dashboard live refresh status control
+- [x] Sidebar alert notification badge
+- [x] Reusable toast notification feedback
 - [x] Reports page
 - [x] Shipment list page
 - [x] Shipment details page
 - [x] Create shipment form
+- [x] Edit shipment form
+- [x] Event timeline actor/source badges
 - [x] Create shipment dropdowns keep placeholder defaults until selected
 - [x] Alerts page
 - [x] Simulation sessions page
@@ -296,28 +337,30 @@ Legend:
 - [x] Company notifications page
 - [x] Integrity cases page
 - [x] Admin user accounts page
+- [x] Admin master data page
 - [x] My account settings page
 - [~] Responsive layout baseline
-- [ ] Loading skeletons
-- [ ] Empty states for every major list
-- [ ] Confirmation modals for destructive actions
+- [-] Loading skeletons
+- [-] Empty states for every major list
+- [-] Confirmation modals for destructive actions
 - [x] Consistent date/time formatter utility
-- [ ] Reusable status badge component
-- [ ] Reusable page loading/error component
-- [ ] Full mobile QA pass
+- [-] Reusable status badge component
+- [-] Reusable page loading/error component
+- [-] Full mobile QA pass
 
 ## 13. CSS and Folder Structure
 
 - [x] `frontend/src/api`
 - [x] `frontend/src/auth`
+- [x] `frontend/src/config`
 - [x] `frontend/src/components/blockchain`
 - [x] `frontend/src/components/dashboard`
+- [x] `frontend/src/components/feedback`
 - [x] `frontend/src/components/forms`
 - [x] `frontend/src/components/icons`
 - [x] `frontend/src/components/layout`
 - [x] `frontend/src/components/map`
 - [x] `frontend/src/components/reports`
-- [x] `frontend/src/components/simulation`
 - [x] `frontend/src/components/shipments`
 - [x] `frontend/src/pages`
 - [x] `frontend/src/pages/admin`
@@ -330,12 +373,14 @@ Legend:
 - [x] `frontend/src/styles/dashboard.css`
 - [x] `frontend/src/styles/shipments.css`
 - [x] `frontend/src/styles/alerts.css`
+- [x] `frontend/src/styles/toast.css`
 - [x] `frontend/src/styles/accounts.css`
 - [x] `frontend/src/styles/reports.css`
 - [x] `frontend/src/styles/simulation.css`
 - [x] `frontend/src/styles/map.css`
 - [x] `frontend/src/styles/blockchain.css`
 - [x] `frontend/src/styles/notifications.css`
+- [x] `frontend/src/styles/admin/master-data.css`
 - [x] `frontend/src/utils`
 - [x] `backend/src/main/java/com/fyp/autologistics/blockchain`
 - [x] `backend/src/main/java/com/fyp/autologistics/config`
@@ -343,6 +388,7 @@ Legend:
 - [x] `backend/src/main/java/com/fyp/autologistics/dto`
 - [x] `backend/src/main/java/com/fyp/autologistics/entity`
 - [x] `backend/src/main/java/com/fyp/autologistics/enums`
+- [x] `backend/src/main/java/com/fyp/autologistics/event`
 - [x] `backend/src/main/java/com/fyp/autologistics/exception`
 - [x] `backend/src/main/java/com/fyp/autologistics/repository`
 - [x] `backend/src/main/java/com/fyp/autologistics/service`
@@ -351,60 +397,227 @@ Legend:
 - [x] `blockchain/contracts`
 - [x] `blockchain/scripts`
 - [x] `blockchain/test`
+- [x] `database/migrations`
+- [x] `database/testing`
 
 ## 14. Testing and Validation
 
 - [x] Backend application context test
 - [x] Frontend production build
+- [x] Targeted lint for redesigned login page
+- [x] Targeted lint for dashboard live refresh
 - [x] Targeted lint for touched auth/blockchain/shipment/alert files
+- [x] Full frontend lint
+- [x] Alert service unit tests for scoped alert access/actions
+- [x] Blockchain service unit tests for retry guards, stored-hash preservation,
+  successful recovery, and health mapping
 - [x] Solidity contract compile
 - [x] Solidity contract tests
 - [x] Blockchain production dependency audit
-- [x] Full Supabase test-data SQL script
-- [x] Full Supabase test-data verification SQL script
-- [x] Continuous simulation test-data SQL script
-- [~] Full frontend lint
-- [ ] Backend service unit tests
-- [ ] Backend controller integration tests
-- [ ] Frontend component tests
-- [ ] End-to-end happy path test
-- [ ] End-to-end blockchain failure path test
-- [ ] User acceptance test checklist
+- [x] System-managed simulation test-data SQL script
+- [x] Admin master-data test-data SQL script
+- [x] Edit shipment details test-data SQL script
+- [x] Shipment event actor/source test-data SQL script
+- [x] Backend service unit tests for shipment transitions, alert scope/actions,
+  stock evaluation, order-update events, and blockchain retry/health
+- [x] Backend controller integration tests for stock authorization and validation
+- [x] Frontend component tests for stock and alert role flows
+- [x] End-to-end authenticated API happy path test
+- [x] End-to-end blockchain failure and retry path test
+- [x] Browser smoke test for blockchain monitor health, pagination, role controls,
+  and disabled-ledger retry behavior
+- [x] Focused low-stock, recovery, role-scope, duplicate-rule, and order-update
+  service tests
+- [x] Production Nginx health and unauthenticated protected-route smoke test
+- [x] Test-only H2 datasource isolates automated tests from Supabase
+- [x] Test contexts use unique in-memory databases
+- [x] Frontend route-level code splitting verified in production build
+- [x] Read-only production health load baseline: 50/50 successful, 217.57 ms P95
+- [x] User acceptance test checklist created at `testing/UAT_CHECKLIST.md`
+- [x] Automated test report created at `testing/TEST_REPORT_2026-08-18.md`
+- [x] Final approved-scope re-audit found no remaining implementation gaps
+- [ ] Manual user acceptance test sign-off with current Supabase accounts
 
 ## 15. Deployment and Cloud Database
 
-- [x] Supabase PostgreSQL schema script
+- [x] Supabase PostgreSQL migration folder
 - [x] Supabase schema supports shipment form options and unique shipment codes
 - [x] Supabase migration query for database-backed shipment master data
 - [x] Supabase migration query for shipment dropdown master data refresh
 - [x] Supabase migration query for user account role/profile management
 - [x] Supabase migration query for normal login readiness
-- [x] Supabase migration query for continuous simulation sessions
+- [x] Supabase migration query for system-managed simulation profiles/sessions
+- [x] Supabase migration query for shipment detail edit audit event
+- [x] Supabase migration query for shipment event actor/source metadata
 - [x] Supabase SQL template for account password reset
 - [x] Root `.env` configured for Supabase Session Pooler
 - [x] Backend datasource loads Supabase settings from environment/config import
 - [x] Local PostgreSQL datasource fallback removed from backend config
 - [x] Supabase connection smoke test from Spring Boot runtime
+- [x] Alert badge/toast UX confirmed to require no new Supabase SQL
+- [x] Supabase migration query for blockchain retry audit fields
+- [x] Supabase migration query for stock rules and low-stock/order-update alerts
 - [ ] Deployment environment variables configured on hosting platform
+- [x] Backend Java 21 multi-stage production Docker image
+- [x] Frontend Vite-to-Nginx multi-stage production Docker image
+- [x] Nginx SPA fallback and same-origin `/api` reverse proxy
+- [x] Spring Boot/Nginx health endpoint
+- [x] Production Docker Compose with external Supabase configuration
+- [x] Centralized environment-configurable CORS policy
+- [x] Production Hibernate schema validation mode
+- [x] Nginx or reverse-proxy deployment alignment
+- [x] Production container images built successfully
+- [x] Frontend production dependency audit reports zero vulnerabilities
 
-Current known lint debt:
+Resolved lint debt:
 
 - [x] `frontend/src/pages/DashboardPage.jsx`
-- [ ] `frontend/src/pages/admin/AdminNotificationsPage.jsx`
-- [ ] `frontend/src/pages/admin/CompanyNotificationsPage.jsx`
-- [ ] `frontend/src/pages/admin/IntegrityCasesPage.jsx`
+- [x] `frontend/src/pages/admin/AdminNotificationsPage.jsx`
+- [x] `frontend/src/pages/admin/CompanyNotificationsPage.jsx`
+- [x] `frontend/src/pages/admin/IntegrityCasesPage.jsx`
 
-## 16. Recommended Next Development Order
+## 16. Scope Decisions From IR Gap Review
 
-1. [x] Add richer shipment operation fields: ETD, current stage, stock location,
-   WIP status, responsible person, and receipt confirmation.
-2. [x] Add shipment list search/filter/pagination.
-3. [x] Add advanced alert rules: ETA overdue, missing update, route deviation,
-   and plan-vs-actual shortfall.
-4. [x] Add reporting pages and CSV export.
-5. [ ] Add retry flow for failed blockchain records.
-6. [x] Add admin user management.
-7. [ ] Add email notification delivery.
-8. [ ] Clean remaining frontend lint debt.
-9. [ ] Add backend service/controller tests.
-10. [ ] Perform full UI responsive QA.
+Decision date: 2026-08-13.
+
+Selected for implementation:
+
+- [x] Admin master-data configuration UI
+- [x] Edit shipment details
+- [x] Audit trail actor/user and event source type
+- [x] Dashboard real-time refresh/polling
+- [x] Alert notification badge and toast feedback
+- [x] Manufacturer access to full alert page
+- [x] Blockchain failed-record retry flow
+- [x] Blockchain admin contract and network health information
+- [x] Deployment/Nginx alignment
+- [x] Low-stock alert
+- [x] Order update alert
+
+Not planned for the current implementation scope:
+
+- [-] Shipment document file upload/download storage
+- [-] Export event timeline
+- [-] Route deviation visual warning
+- [-] Email or external notification delivery
+- [-] Admin reset user password flow
+- [-] Report PDF export
+- [-] Detailed vehicle condition sensor fields
+- [-] Full responsive/mobile polish bundle
+- [-] OpenAPI/Swagger documentation
+- [-] QR code scanning for shipment or vehicle lookup
+- [-] Teams/email communication integration
+- [-] Real-road route planning
+
+Later phase:
+
+- [~] Automated testing and evaluation completed; manual Supabase UAT sign-off
+  remains.
+- [ ] Final report technology-stack update from Vue.js to React + Vite.
+
+## 17. Recommended Next Development Order
+
+1. [x] Add admin master-data configuration UI.
+2. [x] Add edit shipment details.
+3. [x] Add audit trail actor/user and event source type.
+4. [x] Add dashboard real-time refresh/polling.
+5. [x] Add alert badge/toast UX and manufacturer alert page access.
+6. [x] Add blockchain failed-record retry flow.
+7. [x] Add blockchain admin contract and network health information.
+8. [x] Add low-stock alert and order update alert.
+9. [x] Add deployment/Nginx alignment.
+10. [~] Automated testing/evaluation complete; run and sign the manual UAT.
+
+## 18. Stock Alerts and Production Deployment Update
+
+Completion date: 2026-08-18.
+
+- [x] Added `database/migrations/2026-08-18-stock-order-alerts.sql`
+- [x] Migration contains no seed, dropdown, or test business data
+- [x] Added `GET /api/stock-monitoring`
+- [x] Added admin-only `POST /api/stock-monitoring/rules`
+- [x] Added admin-only `PUT /api/stock-monitoring/rules/{ruleId}`
+- [x] Added `LOW_STOCK` and `ORDER_UPDATE` alert types
+- [x] Added shipment-or-stock-rule alert reference integrity constraint
+- [x] Added configurable 30-second stock scheduler
+- [x] Added stock monitoring sidebar route and responsive page styles
+- [x] Added backend and frontend production Dockerfiles
+- [x] Added `deployment/compose.production.yml`
+- [x] Added `frontend/nginx/default.conf`
+- [x] Added `deployment/.env.production.example`
+- [x] Backend tests: 30 passed, 0 failed
+- [x] Frontend ESLint: passed
+- [x] Frontend production build: passed
+- [x] npm production audit: 0 vulnerabilities after non-breaking updates
+- [x] Docker Compose configuration validation: passed
+- [x] Backend and frontend production container builds: passed
+- [x] Nginx `/healthz` to Spring Boot health probe: `UP`
+- [x] Production login page rendered through Nginx
+- [x] Unauthenticated `/stock-monitoring` correctly redirected to `/login`
+- [ ] Authenticated browser flow for stock rule create/edit after the Supabase
+  migration is run with a known current admin password
+
+## 19. Full Automated Testing And Evaluation Update
+
+Completion date: 2026-08-18.
+
+- [x] Added test-scope H2 dependency and isolated datasource configuration
+- [x] Confirmed automated tests do not connect to Supabase
+- [x] Added five stock-monitoring controller security/validation tests
+- [x] Added five shipment status transition and event publication tests
+- [x] Added two order-update listener tests
+- [x] Added authenticated JWT shipment lifecycle integration test
+- [x] Added blockchain-disabled failure notification and retry E2E assertions
+- [x] Backend tests: 30 passed, 0 failed
+- [x] Added Vitest, Testing Library, jest-dom, user-event, and jsdom
+- [x] Frontend component tests: 7 passed, 0 failed
+- [x] Full frontend ESLint and production build passed
+- [x] Frontend and blockchain production audits: 0 vulnerabilities
+- [x] Solidity tests: 2 passed, 0 failed
+- [x] Route-level code splitting reduced initial JS from 570.18 kB to 291.28 kB
+- [x] Latest production frontend image built and reports healthy
+- [x] Browser confirmed login rendering and protected-route redirect
+- [x] Health load baseline: 50 successful, 0 failed, 129.97 ms average,
+  217.57 ms P95, 323.97 ms maximum
+- [x] Added `testing/UAT_CHECKLIST.md`
+- [x] Added `testing/TEST_REPORT_2026-08-18.md`
+- [ ] Execute and sign manual UAT using current Supabase accounts
+
+## 20. Architecture Documentation
+
+Completion date: 2026-08-19.
+
+- [x] Added a code-derived UML role and service class diagram
+- [x] Documented Administrator, Manufacturer, Logistics Provider, and
+  Dealership permissions
+- [x] Added a complete core domain entity and relationship diagram
+- [x] Distinguished JPA associations from logical key/ID associations
+- [x] Added an authorization matrix aligned with `SecurityConfig` and service
+  scoping
+- [x] Linked the class diagram documentation from the main README
+- [x] Added a conventional, high-resolution Administrator module class diagram
+  with React boundaries, REST controllers, services, entities, and labelled
+  relationships
+- [x] Added a native editable `.drawio` version of the Administrator class
+  diagram with validated mxGraph structure
+- [x] Added a code-derived Manufacturer module class diagram covering 43 role,
+  boundary, controller, service, and entity classes with 80 labelled
+  relationships
+- [x] Added report-ready HTML and high-resolution PNG versions of the
+  Manufacturer class diagram
+- [x] Added a native editable `.drawio` version of the Manufacturer class
+  diagram with validated mxGraph structure
+- [x] Added a code-derived Logistics Provider module class diagram covering 37
+  role, boundary, controller, service, event-listener, and entity classes with
+  66 labelled relationships
+- [x] Added report-ready HTML and high-resolution PNG versions of the Logistics
+  Provider class diagram
+- [x] Added a native editable `.drawio` version of the Logistics Provider class
+  diagram with validated mxGraph structure
+- [x] Added a code-derived Dealership module class diagram covering 40 role,
+  boundary, controller, service, event-listener, and entity classes with 73
+  labelled relationships
+- [x] Added report-ready HTML and high-resolution PNG versions of the Dealership
+  class diagram
+- [x] Added a native editable `.drawio` version of the Dealership class diagram
+  with validated mxGraph structure

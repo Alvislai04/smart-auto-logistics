@@ -40,8 +40,12 @@ public class Alert {
     private LocalDateTime resolvedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "shipment_id", nullable = false)
+    @JoinColumn(name = "shipment_id")
     private Shipment shipment;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "stock_alert_rule_id")
+    private StockAlertRule stockAlertRule;
 
     public Alert() {
     }
@@ -127,5 +131,13 @@ public class Alert {
 
     public void setShipment(Shipment shipment) {
         this.shipment = shipment;
+    }
+
+    public StockAlertRule getStockAlertRule() {
+        return stockAlertRule;
+    }
+
+    public void setStockAlertRule(StockAlertRule stockAlertRule) {
+        this.stockAlertRule = stockAlertRule;
     }
 }

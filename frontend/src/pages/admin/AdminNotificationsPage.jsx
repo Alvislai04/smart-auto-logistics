@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminNotificationApi } from "../../api/adminNotificationApi";
 
 function AdminNotificationsPage() {
@@ -7,23 +7,24 @@ function AdminNotificationsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
-  useEffect(() => {
-    loadNotifications();
-  }, []);
-
-  const loadNotifications = async () => {
+  const loadNotifications = useCallback(async () => {
     try {
       setIsLoading(true);
       setErrorMessage("");
 
       const data = await adminNotificationApi.getAll();
       setNotifications(data);
-    } catch (error) {
+    } catch {
       setErrorMessage("Failed to load admin notifications.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadNotifications();
+  }, [loadNotifications]);
 
   const filteredNotifications = useMemo(() => {
     if (filter === "ALL") {
@@ -94,7 +95,7 @@ function AdminNotificationsPage() {
                   <p>{notification.message}</p>
 
                   <small>
-                    Type: {notification.type} · Reference:{" "}
+                    Type: {notification.type} - Reference:{" "}
                     {notification.referenceType} #{notification.referenceId}
                   </small>
 

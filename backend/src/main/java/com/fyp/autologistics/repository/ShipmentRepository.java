@@ -1,7 +1,9 @@
 package com.fyp.autologistics.repository;
 
 import com.fyp.autologistics.entity.Shipment;
+import com.fyp.autologistics.enums.LogisticsStage;
 import com.fyp.autologistics.enums.ShipmentStatus;
+import com.fyp.autologistics.enums.SimulationSessionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -32,6 +34,26 @@ public interface ShipmentRepository
     List<Shipment> findByStatusIn(Collection<ShipmentStatus> statuses);
 
     @Query("""
+            select s
+            from Shipment s
+            where s.status in :shipmentStatuses
+              and s.originLatitude is not null
+              and s.originLongitude is not null
+              and s.destinationLatitude is not null
+              and s.destinationLongitude is not null
+              and not exists (
+                  select 1
+                  from SimulationSession ss
+                  where ss.shipment = s
+                    and ss.status in :sessionStatuses
+              )
+            """)
+    List<Shipment> findShipmentsWithoutOpenSimulationSession(
+            @Param("shipmentStatuses") Collection<ShipmentStatus> shipmentStatuses,
+            @Param("sessionStatuses") Collection<SimulationSessionStatus> sessionStatuses
+    );
+
+    @Query("""
             select s.status as status, count(s) as total
             from Shipment s
             group by s.status
@@ -59,4 +81,18 @@ public interface ShipmentRepository
     );
 
     boolean existsByShipmentCode(String shipmentCode);
+
+    long countByManufacturerKeyAndVehicleModelCodeAndCurrentStageAndStatusNot(
+            String manufacturerKey,
+            String vehicleModelCode,
+            LogisticsStage currentStage,
+            ShipmentStatus excludedStatus
+    );
+
+    long countByDealershipKeyAndVehicleModelCodeAndCurrentStageAndStatusNot(
+            String dealershipKey,
+            String vehicleModelCode,
+            LogisticsStage currentStage,
+            ShipmentStatus excludedStatus
+    );
 }

@@ -1,28 +1,31 @@
 package com.fyp.autologistics.service;
 
+import com.fyp.autologistics.blockchain.BlockchainHealthSnapshot;
 import com.fyp.autologistics.blockchain.BlockchainLedgerClient;
 import com.fyp.autologistics.blockchain.BlockchainLedgerException;
 import com.fyp.autologistics.blockchain.BlockchainTransactionReceipt;
+import com.fyp.autologistics.dto.BlockchainHealthResponse;
 import com.fyp.autologistics.dto.BlockchainRecordResponse;
 import com.fyp.autologistics.entity.BlockchainRecord;
-import com.fyp.autologistics.enums.BlockchainRecordStatus;
-import com.fyp.autologistics.exception.BadRequestException;
-import com.fyp.autologistics.repository.BlockchainRecordRepository;
 import com.fyp.autologistics.entity.ShipmentEvent;
 import com.fyp.autologistics.enums.AdminNotificationType;
-import com.fyp.autologistics.exception.ResourceNotFoundException;
-import com.fyp.autologistics.repository.ShipmentEventRepository;
+import com.fyp.autologistics.enums.BlockchainRecordStatus;
 import com.fyp.autologistics.enums.CompanyNotificationType;
-
+import com.fyp.autologistics.exception.BadRequestException;
+import com.fyp.autologistics.exception.ResourceNotFoundException;
+import com.fyp.autologistics.repository.BlockchainRecordRepository;
+import com.fyp.autologistics.repository.ShipmentEventRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
-import java.time.LocalDateTime;
 
 @Service
 public class BlockchainRecordService {
@@ -106,6 +109,79 @@ public class BlockchainRecordService {
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
+    }
+
+    public BlockchainHealthResponse getHealth() {
+        BlockchainHealthSnapshot snapshot = blockchainLedgerClient.getHealthSnapshot();
+        return new BlockchainHealthResponse(
+                snapshot.status(),
+                snapshot.enabled(),
+                snapshot.connected(),
+                snapshot.contractConfigured(),
+                snapshot.contractDeployed(),
+                snapshot.signerConfigured(),
+                snapshot.contractAddress(),
+                snapshot.chainId(),
+                snapshot.latestBlockNumber(),
+                snapshot.message(),
+                LocalDateTime.now()
+        );
+    }
+
+    @Transactional
+    public BlockchainRecordResponse retryFailedRecord(Long blockchainRecordId) {
+        BlockchainRecord blockchainRecord = blockchainRecordRepository
+                .findByIdForUpdate(blockchainRecordId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Blockchain record not found with id: " + blockchainRecordId
+                ));
+
+        validateRecordCanBeRetried(blockchainRecord);
+
+        ShipmentEvent shipmentEvent = shipmentEventRepository.findById(
+                blockchainRecord.getShipmentEventId()
+        ).orElseThrow(() -> new ResourceNotFoundException(
+                "Shipment event not found with id: " + blockchainRecord.getShipmentEventId()
+        ));
+
+        blockchainRecord.setRetryCount(
+                (blockchainRecord.getRetryCount() == null ? 0 : blockchainRecord.getRetryCount()) + 1
+        );
+        blockchainRecord.setLastRetryAt(LocalDateTime.now());
+
+        try {
+            BlockchainTransactionReceipt receipt = blockchainLedgerClient.recordShipmentEvent(
+                    blockchainRecord.getShipmentId(),
+                    blockchainRecord.getShipmentEventId(),
+                    blockchainRecord.getEventHash()
+            );
+
+            blockchainRecord.setTransactionHash(receipt.transactionHash());
+            blockchainRecord.setBlockNumber(receipt.blockNumber());
+            blockchainRecord.setStatus(BlockchainRecordStatus.RECORDED);
+            blockchainRecord.setVerificationMessage(
+                    "Blockchain recording retry succeeded. The original stored shipment event "
+                            + "hash is now on-chain."
+            );
+        } catch (BlockchainLedgerException exception) {
+            blockchainRecord.setStatus(BlockchainRecordStatus.FAILED);
+            blockchainRecord.setVerificationMessage(
+                    "Blockchain recording retry failed: " + exception.getMessage()
+            );
+        }
+
+        BlockchainRecord savedRecord = blockchainRecordRepository.save(blockchainRecord);
+
+        if (savedRecord.getStatus() == BlockchainRecordStatus.RECORDED) {
+            adminNotificationService.markUnreadReferenceNotificationsAsRead(
+                    "BLOCKCHAIN_RECORD",
+                    savedRecord.getId()
+            );
+        } else {
+            createBlockchainFailureNotification(savedRecord);
+        }
+
+        return mapToResponse(savedRecord);
     }
 
     @Transactional
@@ -194,7 +270,7 @@ public class BlockchainRecordService {
     }
 
     private String buildEventPayload(ShipmentEvent shipmentEvent) {
-        return String.join(
+        String basePayload = String.join(
                 "|",
                 shipmentEvent.getShipment().getId().toString(),
                 shipmentEvent.getShipment().getShipmentCode(),
@@ -203,8 +279,36 @@ public class BlockchainRecordService {
                 shipmentEvent.getDescription(),
                 shipmentEvent.getPreviousStatus() == null ? "" : shipmentEvent.getPreviousStatus(),
                 shipmentEvent.getNewStatus() == null ? "" : shipmentEvent.getNewStatus(),
-                shipmentEvent.getCreatedAt().toString()
+                formatEventTimestamp(shipmentEvent.getCreatedAt())
         );
+
+        if (!usesVersionedAuditPayload(shipmentEvent)) {
+            return basePayload;
+        }
+
+        return String.join(
+                "|",
+                basePayload,
+                nullablePayloadValue(shipmentEvent.getActorUserId()),
+                nullablePayloadValue(shipmentEvent.getActorName()),
+                nullablePayloadValue(shipmentEvent.getActorEmail()),
+                nullablePayloadValue(shipmentEvent.getActorRole()),
+                nullablePayloadValue(shipmentEvent.getSourceType()),
+                nullablePayloadValue(shipmentEvent.getEventPayloadVersion())
+        );
+    }
+
+    private boolean usesVersionedAuditPayload(ShipmentEvent shipmentEvent) {
+        return shipmentEvent.getEventPayloadVersion() != null
+                && shipmentEvent.getEventPayloadVersion() >= 2;
+    }
+
+    private String nullablePayloadValue(Object value) {
+        return value == null ? "" : value.toString();
+    }
+
+    private String formatEventTimestamp(LocalDateTime createdAt) {
+        return createdAt.truncatedTo(ChronoUnit.MICROS).toString();
     }
 
     private BlockchainRecord saveRecordWithLedgerResult(
@@ -243,6 +347,20 @@ public class BlockchainRecordService {
         }
 
         return savedRecord;
+    }
+
+    private void validateRecordCanBeRetried(BlockchainRecord blockchainRecord) {
+        if (blockchainRecord.getStatus() != BlockchainRecordStatus.FAILED) {
+            throw new BadRequestException("Only failed blockchain records can be retried.");
+        }
+
+        if (StringUtils.hasText(blockchainRecord.getTransactionHash())
+                || blockchainRecord.getBlockNumber() != null) {
+            throw new BadRequestException(
+                    "This failed record was already written on-chain and must be verified or "
+                            + "investigated instead of retried."
+            );
+        }
     }
 
     private void createBlockchainFailureNotification(BlockchainRecord blockchainRecord) {
@@ -317,7 +435,9 @@ public class BlockchainRecordService {
                 blockchainRecord.getStatus(),
                 blockchainRecord.getRecordedAt(),
                 blockchainRecord.getVerifiedAt(),
-                blockchainRecord.getVerificationMessage()
+                blockchainRecord.getVerificationMessage(),
+                blockchainRecord.getRetryCount(),
+                blockchainRecord.getLastRetryAt()
         );
     }
 }

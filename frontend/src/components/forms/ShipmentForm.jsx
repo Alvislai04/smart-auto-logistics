@@ -1,26 +1,8 @@
-import { formatEnumLabel } from "../../utils/formatters";
-
-const logisticsStageOptions = [
-  "MANUFACTURING",
-  "STOCK_YARD",
-  "WORK_IN_PROGRESS",
-  "READY_FOR_DISPATCH",
-  "IN_TRANSIT",
-  "ARRIVED_AT_DEALERSHIP",
-  "DELIVERED",
-];
-
-const workInProgressStatusOptions = [
-  "NOT_APPLICABLE",
-  "NOT_STARTED",
-  "IN_PROGRESS",
-  "ON_HOLD",
-  "COMPLETED",
-];
-
 function ShipmentForm({
   formData,
   formOptions,
+  shipmentCode = "",
+  isReadOnly = false,
   isLoadingOptions,
   isSubmitting,
   submitButtonLabel,
@@ -30,6 +12,10 @@ function ShipmentForm({
   const vehicleModels = formOptions?.vehicleModels ?? [];
   const manufacturerOrigins = formOptions?.manufacturerOrigins ?? [];
   const dealershipDestinations = formOptions?.dealershipDestinations ?? [];
+  const logisticsStageOptions = formOptions?.logisticsStageOptions ?? [];
+  const workInProgressStatusOptions =
+    formOptions?.workInProgressStatusOptions ?? [];
+  const formDisabled = isReadOnly || isLoadingOptions;
 
   return (
     <form className="form-panel shipment-form" onSubmit={onSubmit}>
@@ -44,7 +30,7 @@ function ShipmentForm({
             <input
               className="readonly-input"
               type="text"
-              value="Generated after save"
+              value={shipmentCode || "Generated after save"}
               readOnly
             />
           </label>
@@ -57,6 +43,7 @@ function ShipmentForm({
               value={formData.vehicleVin}
               onChange={onChange}
               placeholder="Example: VIN123456789"
+              disabled={isReadOnly}
               required
             />
           </label>
@@ -67,7 +54,7 @@ function ShipmentForm({
               name="vehicleModelKey"
               value={formData.vehicleModelKey}
               onChange={onChange}
-              disabled={isLoadingOptions}
+              disabled={formDisabled}
               required
             >
               <option value="">Select Mercedes-Benz model</option>
@@ -85,7 +72,7 @@ function ShipmentForm({
               name="manufacturerKey"
               value={formData.manufacturerKey}
               onChange={onChange}
-              disabled={isLoadingOptions}
+              disabled={formDisabled}
               required
             >
               <option value="">Select manufacturer origin</option>
@@ -103,7 +90,7 @@ function ShipmentForm({
               name="dealershipKey"
               value={formData.dealershipKey}
               onChange={onChange}
-              disabled={isLoadingOptions}
+              disabled={formDisabled}
               required
             >
               <option value="">Select dealership destination</option>
@@ -152,6 +139,7 @@ function ShipmentForm({
               name="estimatedDeparture"
               value={formData.estimatedDeparture}
               onChange={onChange}
+              disabled={isReadOnly}
               required
             />
           </label>
@@ -163,6 +151,7 @@ function ShipmentForm({
               name="estimatedArrival"
               value={formData.estimatedArrival}
               onChange={onChange}
+              disabled={isReadOnly}
               required
             />
           </label>
@@ -173,11 +162,13 @@ function ShipmentForm({
               name="currentStage"
               value={formData.currentStage}
               onChange={onChange}
+              disabled={formDisabled}
               required
             >
+              <option value="">Select logistics stage</option>
               {logisticsStageOptions.map((stage) => (
-                <option key={stage} value={stage}>
-                  {formatEnumLabel(stage)}
+                <option key={stage.key} value={stage.key}>
+                  {stage.displayName}
                 </option>
               ))}
             </select>
@@ -191,6 +182,7 @@ function ShipmentForm({
               value={formData.stockLocation}
               onChange={onChange}
               placeholder="Example: Shah Alam Yard B"
+              disabled={isReadOnly}
               required
             />
           </label>
@@ -201,11 +193,13 @@ function ShipmentForm({
               name="workInProgressStatus"
               value={formData.workInProgressStatus}
               onChange={onChange}
+              disabled={formDisabled}
               required
             >
+              <option value="">Select WIP status</option>
               {workInProgressStatusOptions.map((status) => (
-                <option key={status} value={status}>
-                  {formatEnumLabel(status)}
+                <option key={status.key} value={status.key}>
+                  {status.displayName}
                 </option>
               ))}
             </select>
@@ -219,6 +213,7 @@ function ShipmentForm({
               value={formData.shipmentDocumentReference}
               onChange={onChange}
               placeholder="Example: DO-2026-0001"
+              disabled={isReadOnly}
             />
           </label>
 
@@ -230,6 +225,7 @@ function ShipmentForm({
               value={formData.responsiblePerson}
               onChange={onChange}
               placeholder="Example: Ahmad Logistics"
+              disabled={isReadOnly}
               required
             />
           </label>
@@ -242,6 +238,7 @@ function ShipmentForm({
               value={formData.responsibleContact}
               onChange={onChange}
               placeholder="Example: +60 12-345 6789"
+              disabled={isReadOnly}
               required
             />
           </label>
@@ -326,6 +323,7 @@ function ShipmentForm({
               value={formData.customerName}
               onChange={onChange}
               placeholder="Example: Lim Wei Chen"
+              disabled={isReadOnly}
               required
             />
           </label>
@@ -338,6 +336,7 @@ function ShipmentForm({
               value={formData.customerContact}
               onChange={onChange}
               placeholder="Example: +60 17-888 1234"
+              disabled={isReadOnly}
               required
             />
           </label>
@@ -350,6 +349,7 @@ function ShipmentForm({
               onChange={onChange}
               placeholder="Example: 88 Jalan Ampang, Kuala Lumpur"
               rows="3"
+              disabled={isReadOnly}
               required
             />
           </label>
@@ -357,7 +357,7 @@ function ShipmentForm({
       </section>
 
       <div className="form-actions">
-        <button type="submit" disabled={isSubmitting || isLoadingOptions}>
+        <button type="submit" disabled={isSubmitting || formDisabled}>
           {isSubmitting ? "Saving..." : submitButtonLabel}
         </button>
       </div>

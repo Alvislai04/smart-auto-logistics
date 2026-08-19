@@ -78,8 +78,10 @@ CANCELLED
 - [x] Create tracking event API
 - [x] View tracking events by shipment ID
 - [x] View latest tracking event by shipment ID
-- [x] Simulate next GPS point API
-- [x] Simulate vehicle speed
+- [x] System automatically generates GPS points
+- [x] System automatically varies vehicle speed
+- [x] Database-backed random telemetry profiles
+- [x] System-owned simulation sessions
 - [x] Detect normal movement
 - [x] Detect delayed movement
 - [x] Detect idle vehicle
@@ -788,17 +790,8 @@ POST /api/shipments/{shipmentId}/tracking-events
 ### Simulation
 
 ```http
-POST /api/shipments/{shipmentId}/simulation/next-point
-```
-
-Example body:
-
-```json
-{
-  "currentLatitude": 1.5533,
-  "currentLongitude": 110.3592,
-  "speed": 55.0
-}
+GET /api/shipments/{shipmentId}/simulation/session
+GET /api/simulation-sessions
 ```
 
 ### Alerts

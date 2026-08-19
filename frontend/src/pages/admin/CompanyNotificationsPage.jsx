@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { companyNotificationApi } from "../../api/companyNotificationApi";
 
 function CompanyNotificationsPage() {
@@ -8,23 +8,24 @@ function CompanyNotificationsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
-  useEffect(() => {
-    loadCompanyNotifications();
-  }, []);
-
-  const loadCompanyNotifications = async () => {
+  const loadCompanyNotifications = useCallback(async () => {
     try {
       setIsLoading(true);
       setErrorMessage("");
 
       const data = await companyNotificationApi.getAll();
       setNotifications(data);
-    } catch (error) {
+    } catch {
       setErrorMessage("Failed to load company notifications.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadCompanyNotifications();
+  }, [loadCompanyNotifications]);
 
   const filteredNotifications = useMemo(() => {
     return notifications.filter((notification) => {

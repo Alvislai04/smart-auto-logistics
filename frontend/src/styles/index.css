@@ -6,6 +6,8 @@
 @import "./dashboard.css";
 @import "./shipments.css";
 @import "./alerts.css";
+@import "./stock-monitoring.css";
+@import "./toast.css";
 @import "./accounts.css";
 @import "./reports.css";
 @import "./simulation.css";
@@ -13,5 +15,6 @@
 @import "./blockchain.css";
 @import "./notifications.css";
 @import "./auth.css";
+@import "./admin/master-data.css";
 @import "./admin/company-notifications.css";
 @import "./admin/integrity-cases.css";

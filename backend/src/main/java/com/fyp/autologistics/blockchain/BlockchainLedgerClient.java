@@ -9,4 +9,6 @@ public interface BlockchainLedgerClient {
     );
 
     String getRecordedEventHash(Long shipmentEventId);
+
+    BlockchainHealthSnapshot getHealthSnapshot();
 }

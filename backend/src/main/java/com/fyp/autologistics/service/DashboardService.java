@@ -5,6 +5,9 @@ import com.fyp.autologistics.dto.DashboardOverviewResponse;
 import com.fyp.autologistics.dto.DashboardSummaryResponse;
 import com.fyp.autologistics.entity.Alert;
 import com.fyp.autologistics.entity.AppUser;
+import com.fyp.autologistics.entity.Shipment;
+import com.fyp.autologistics.entity.StockAlertRule;
+import com.fyp.autologistics.enums.AlertReferenceType;
 import com.fyp.autologistics.enums.AlertStatus;
 import com.fyp.autologistics.enums.ShipmentStatus;
 import com.fyp.autologistics.enums.UserRole;
@@ -14,6 +17,7 @@ import com.fyp.autologistics.repository.ShipmentRepository.ShipmentStatusCount;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.data.domain.PageRequest;
 
 import java.util.EnumMap;
 import java.util.List;
@@ -138,7 +142,7 @@ public class DashboardService {
         if (role == UserRole.MANUFACTURER) {
             String partyProfileKey = user.getPartyProfileKey();
             return StringUtils.hasText(partyProfileKey)
-                    ? alertRepository.countByStatusAndShipmentManufacturerKey(
+                    ? alertRepository.countVisibleToManufacturer(
                             AlertStatus.OPEN,
                             partyProfileKey
                     )
@@ -148,11 +152,15 @@ public class DashboardService {
         if (role == UserRole.DEALERSHIP) {
             String partyProfileKey = user.getPartyProfileKey();
             return StringUtils.hasText(partyProfileKey)
-                    ? alertRepository.countByStatusAndShipmentDealershipKey(
+                    ? alertRepository.countVisibleToDealership(
                             AlertStatus.OPEN,
                             partyProfileKey
                     )
                     : 0;
+        }
+
+        if (role == UserRole.LOGISTICS_PROVIDER) {
+            return alertRepository.countByStatusAndShipmentIsNotNull(AlertStatus.OPEN);
         }
 
         return alertRepository.countByStatus(AlertStatus.OPEN);
@@ -164,9 +172,10 @@ public class DashboardService {
         if (role == UserRole.MANUFACTURER) {
             String partyProfileKey = user.getPartyProfileKey();
             return StringUtils.hasText(partyProfileKey)
-                    ? alertRepository.findTop5ByStatusAndShipmentManufacturerKeyOrderByCreatedAtDesc(
+                    ? alertRepository.findVisibleToManufacturer(
                             AlertStatus.OPEN,
-                            partyProfileKey
+                            partyProfileKey,
+                            PageRequest.of(0, 5)
                     )
                     : List.of();
         }
@@ -174,21 +183,38 @@ public class DashboardService {
         if (role == UserRole.DEALERSHIP) {
             String partyProfileKey = user.getPartyProfileKey();
             return StringUtils.hasText(partyProfileKey)
-                    ? alertRepository.findTop5ByStatusAndShipmentDealershipKeyOrderByCreatedAtDesc(
+                    ? alertRepository.findVisibleToDealership(
                             AlertStatus.OPEN,
-                            partyProfileKey
+                            partyProfileKey,
+                            PageRequest.of(0, 5)
                     )
                     : List.of();
+        }
+
+        if (role == UserRole.LOGISTICS_PROVIDER) {
+            return alertRepository.findByStatusAndShipmentIsNotNullOrderByCreatedAtDesc(
+                    AlertStatus.OPEN,
+                    PageRequest.of(0, 5)
+            );
         }
 
         return alertRepository.findTop5ByStatusOrderByCreatedAtDesc(AlertStatus.OPEN);
     }
 
     private AlertResponse mapToAlertResponse(Alert alert) {
+        Shipment shipment = alert.getShipment();
+        StockAlertRule stockAlertRule = alert.getStockAlertRule();
+        AlertReferenceType referenceType = shipment != null
+                ? AlertReferenceType.SHIPMENT
+                : AlertReferenceType.STOCK_RULE;
+
         return new AlertResponse(
                 alert.getId(),
-                alert.getShipment().getId(),
-                alert.getShipment().getShipmentCode(),
+                shipment == null ? null : shipment.getId(),
+                shipment == null ? null : shipment.getShipmentCode(),
+                referenceType,
+                shipment != null ? shipment.getId() : stockAlertRule.getId(),
+                shipment != null ? shipment.getShipmentCode() : stockAlertRule.getRuleKey(),
                 alert.getAlertType(),
                 alert.getSeverity(),
                 alert.getStatus(),

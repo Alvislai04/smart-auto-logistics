@@ -2,15 +2,20 @@ package com.fyp.autologistics.service;
 
 import com.fyp.autologistics.dto.ShipmentFormOptionsResponse;
 import com.fyp.autologistics.dto.ShipmentPartyOptionResponse;
+import com.fyp.autologistics.dto.MasterDataOptionResponse;
 import com.fyp.autologistics.dto.VehicleModelOptionResponse;
 import com.fyp.autologistics.entity.ShipmentPartyProfile;
 import com.fyp.autologistics.entity.VehicleModel;
+import com.fyp.autologistics.enums.LogisticsStage;
 import com.fyp.autologistics.enums.UserRole;
+import com.fyp.autologistics.enums.WorkInProgressStatus;
 import com.fyp.autologistics.repository.ShipmentPartyProfileRepository;
 import com.fyp.autologistics.repository.VehicleModelRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 public class ShipmentOptionsService {
@@ -30,7 +35,9 @@ public class ShipmentOptionsService {
         return new ShipmentFormOptionsResponse(
                 getVehicleModelOptions(),
                 getPartyOptions(UserRole.MANUFACTURER),
-                getPartyOptions(UserRole.DEALERSHIP)
+                getPartyOptions(UserRole.DEALERSHIP),
+                getLogisticsStageOptions(),
+                getWorkInProgressStatusOptions()
         );
     }
 
@@ -65,5 +72,39 @@ public class ShipmentOptionsService {
                 profile.getLocationLatitude(),
                 profile.getLocationLongitude()
         );
+    }
+
+    private List<MasterDataOptionResponse> getLogisticsStageOptions() {
+        return Arrays.stream(LogisticsStage.values())
+                .map(stage -> new MasterDataOptionResponse(
+                        stage.name(),
+                        toDisplayLabel(stage.name())
+                ))
+                .toList();
+    }
+
+    private List<MasterDataOptionResponse> getWorkInProgressStatusOptions() {
+        return Arrays.stream(WorkInProgressStatus.values())
+                .map(status -> new MasterDataOptionResponse(
+                        status.name(),
+                        toDisplayLabel(status.name())
+                ))
+                .toList();
+    }
+
+    private String toDisplayLabel(String value) {
+        String[] words = value.toLowerCase(Locale.ROOT).split("_");
+        StringBuilder label = new StringBuilder();
+
+        for (String word : words) {
+            if (label.length() > 0) {
+                label.append(' ');
+            }
+
+            label.append(Character.toUpperCase(word.charAt(0)));
+            label.append(word.substring(1));
+        }
+
+        return label.toString();
     }
 }

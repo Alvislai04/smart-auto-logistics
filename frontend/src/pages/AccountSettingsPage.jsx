@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { userApi } from "../api/userApi";
 import { useAuth } from "../auth/AuthContext";
+import { useToast } from "../components/feedback/ToastContext";
 import { formatEnumLabel } from "../utils/formatters";
 
 const emptyProfileForm = {
@@ -41,6 +42,7 @@ function requiresCompanyProfile(role) {
 
 function AccountSettingsPage() {
   const { updateCurrentUser } = useAuth();
+  const { showToast } = useToast();
   const [profileForm, setProfileForm] = useState(emptyProfileForm);
   const [passwordForm, setPasswordForm] = useState(emptyPasswordForm);
   const [isLoading, setIsLoading] = useState(true);
@@ -75,6 +77,7 @@ function AccountSettingsPage() {
   }, [updateCurrentUser]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadProfile();
   }, [loadProfile]);
 
@@ -135,8 +138,22 @@ function AccountSettingsPage() {
 
       updateCurrentUser(updatedProfile);
       setSuccessMessage("Account profile updated.");
+      showToast({
+        type: "success",
+        title: "Profile updated",
+        message: "Your account details were saved.",
+      });
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, "Failed to update account profile."));
+      const message = getErrorMessage(
+        error,
+        "Failed to update account profile.",
+      );
+      setErrorMessage(message);
+      showToast({
+        type: "error",
+        title: "Profile update failed",
+        message,
+      });
     } finally {
       setIsSavingProfile(false);
     }
@@ -158,8 +175,19 @@ function AccountSettingsPage() {
       await userApi.changePassword(passwordForm);
       setPasswordForm(emptyPasswordForm);
       setSuccessMessage("Password changed.");
+      showToast({
+        type: "success",
+        title: "Password changed",
+        message: "Your new password is active for future sign-ins.",
+      });
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, "Failed to change password."));
+      const message = getErrorMessage(error, "Failed to change password.");
+      setErrorMessage(message);
+      showToast({
+        type: "error",
+        title: "Password change failed",
+        message,
+      });
     } finally {
       setIsSavingPassword(false);
     }
