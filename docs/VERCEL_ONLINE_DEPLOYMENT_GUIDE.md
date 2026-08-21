@@ -5,20 +5,23 @@ This guide deploys the complete application with this production layout:
 ```text
 Browser
   -> Vercel: React + Vite frontend
-  -> Render: Spring Boot REST API and scheduled jobs
+  -> Render Free: Spring Boot REST API and scheduled jobs while awake
   -> Supabase: PostgreSQL database
   -> Optional public EVM testnet: blockchain ledger
 ```
 
 Vercel supports Vite directly and provides HTTPS deployment URLs. The Spring
-Boot API is deliberately deployed as one always-on container instead of a
-Vercel Function because this application runs automatic simulation every five
-seconds and stock monitoring every thirty seconds. Function scale-to-zero and
-horizontal scaling are not appropriate for those in-process schedulers.
+Boot API is deliberately deployed as one container instead of a Vercel Function
+because this application runs automatic simulation every five seconds and stock
+monitoring every thirty seconds. Horizontal function scaling is not appropriate
+for those in-process schedulers.
 
-The committed `render.yaml` selects Render's paid `starter` plan so the backend
-does not sleep. Render's free web services spin down after inactivity, which
-would pause the automatic simulation and stock scheduler.
+The committed `render.yaml` selects Render's Free plan. Render spins down a Free
+web service after 15 minutes without inbound traffic and wakes it on the next
+request, which can take about one minute. Automatic simulation and stock
+monitoring pause while the service sleeps and resume after it wakes. Supabase
+data is unaffected. Upgrade the service to Starter if continuous background
+processing becomes necessary.
 
 Official references:
 
@@ -85,7 +88,7 @@ Deploy the backend first because Vercel needs its public API URL.
    - Type: Web Service
    - Runtime: Docker
    - Region: Singapore
-   - Plan: Starter
+   - Plan: Free
    - Health check: `/actuator/health`
    - Instances: 1
 7. Enter the prompted secret variables:
@@ -100,7 +103,7 @@ APP_CORS_ALLOWED_ORIGINS       http://localhost:5173
 The localhost CORS value is temporary until the Vercel URL exists. Render
 generates and stores `JWT_SECRET`; do not replace it on every deployment.
 
-8. Confirm the paid Starter service and create the Blueprint.
+8. Confirm the Free service and create the Blueprint.
 9. Wait for the Docker build and deployment to complete.
 10. Copy the service URL, for example:
 
@@ -306,9 +309,11 @@ and intentionally does not modify the schema automatically.
 
 ### Automatic simulation stops
 
-Confirm the Render service uses an always-on paid instance, has exactly one
-application instance, and both scheduler environment variables are `true`. A
-free sleeping service cannot provide continuous background simulation.
+Confirm the Render service is awake, has exactly one application instance, and
+both scheduler environment variables are `true`. On the Free plan, open the
+application and allow up to one minute for the first request to wake the backend.
+Free hosting cannot provide continuous background simulation while no users are
+accessing the system.
 
 ### Users are signed out after a backend configuration change
 

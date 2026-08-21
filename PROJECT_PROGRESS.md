@@ -649,13 +649,15 @@ Completion date: 2026-08-20.
 
 Completion date: 2026-08-21.
 
-- [x] Chose Vercel for the React/Vite frontend and an always-on backend service
+- [x] Chose Vercel for the React/Vite frontend and one Render backend instance
 - [x] Documented why scheduler-dependent Spring Boot is unsuitable for
   scale-to-zero or multi-instance function deployment
 - [x] Added `frontend/vercel.json` with React Router fallback routing
 - [x] Added production browser security and immutable asset-cache headers
 - [x] Updated Spring Boot to honor the platform-provided `PORT`
 - [x] Added `render.yaml` for one Singapore-region Docker backend instance
+- [x] Switched the Render Blueprint to Free at the user's request
+- [x] Documented Free-plan sleep, wake-up delay, and scheduler limitations
 - [x] Configured production schema validation and a small Supabase pool
 - [x] Kept Supabase credentials and the allowed frontend origin as dashboard
   secrets

@@ -92,7 +92,7 @@ blockchain, automated checks, and common startup errors.
 For public internet deployment, follow the
 [Vercel online deployment guide](docs/VERCEL_ONLINE_DEPLOYMENT_GUIDE.md). The
 frontend runs on Vercel while the scheduler-dependent Spring Boot API runs as
-one always-on container connected to Supabase.
+one Render container connected to Supabase.
 
 ## Project Structure
 
@@ -233,15 +233,17 @@ Keep the React frontend connected to the Spring Boot backend through
 The recommended hosted architecture is:
 
 - Vercel for the React + Vite frontend
-- One always-on Render Docker web service for Spring Boot and its schedulers
+- One Render Docker web service for Spring Boot and its schedulers
 - Supabase PostgreSQL for persistent data
 - A public EVM test network only when online blockchain recording is enabled
 
-Do not deploy the current Spring Boot API as a scale-to-zero function. Automatic
-simulation and stock monitoring run every 5 and 30 seconds inside the backend,
-so the API must remain active and must use one application instance. Follow the
-[step-by-step Vercel guide](docs/VERCEL_ONLINE_DEPLOYMENT_GUIDE.md) for the
-deployment order, environment variables, CORS configuration, and verification.
+Do not deploy the current Spring Boot API as a horizontally scaled function.
+Automatic simulation and stock monitoring run every 5 and 30 seconds inside the
+backend, so it must use one application instance. The selected Render Free plan
+sleeps after inactivity, pausing those jobs until the next request wakes it.
+Follow the [step-by-step Vercel guide](docs/VERCEL_ONLINE_DEPLOYMENT_GUIDE.md)
+for the deployment order, environment variables, CORS configuration, and
+verification.
 
 ## Production Deployment
 
