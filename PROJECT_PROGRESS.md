@@ -644,3 +644,30 @@ Completion date: 2026-08-20.
 - [x] Backend tests passed: 30 tests, 0 failures
 - [x] Frontend checks passed: ESLint, 7 component tests, and production build
 - [x] Hardhat Solidity tests passed: 2 tests, 0 failures
+
+## 22. Vercel Online Deployment Readiness
+
+Completion date: 2026-08-21.
+
+- [x] Chose Vercel for the React/Vite frontend and an always-on backend service
+- [x] Documented why scheduler-dependent Spring Boot is unsuitable for
+  scale-to-zero or multi-instance function deployment
+- [x] Added `frontend/vercel.json` with React Router fallback routing
+- [x] Added production browser security and immutable asset-cache headers
+- [x] Updated Spring Boot to honor the platform-provided `PORT`
+- [x] Added `render.yaml` for one Singapore-region Docker backend instance
+- [x] Configured production schema validation and a small Supabase pool
+- [x] Kept Supabase credentials and the allowed frontend origin as dashboard
+  secrets
+- [x] Added `docs/VERCEL_ONLINE_DEPLOYMENT_GUIDE.md`
+- [x] Documented the Vercel and Render dashboard flows step by step
+- [x] Documented CORS handoff, deployment verification, and custom domains
+- [x] Documented the online blockchain requirement and private-key boundaries
+- [x] Vercel configuration JSON parsed successfully
+- [x] Backend tests passed after cloud-port support: 30 tests, 0 failures
+- [x] Frontend ESLint passed
+- [x] Frontend component tests passed: 7 tests, 0 failures
+- [x] Vercel-targeted frontend production build passed
+- [ ] Deploy the Render backend and record its final HTTPS URL
+- [ ] Deploy the Vercel frontend and record its final HTTPS URL
+- [ ] Complete authenticated production smoke testing with all four roles

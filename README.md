@@ -89,6 +89,11 @@ For a fresh clone, follow the complete
 development, Docker/Nginx, Supabase, first-admin bootstrap, the optional local
 blockchain, automated checks, and common startup errors.
 
+For public internet deployment, follow the
+[Vercel online deployment guide](docs/VERCEL_ONLINE_DEPLOYMENT_GUIDE.md). The
+frontend runs on Vercel while the scheduler-dependent Spring Boot API runs as
+one always-on container connected to Supabase.
+
 ## Project Structure
 
 ```text
@@ -118,6 +123,7 @@ smart-auto-logistics/
 +-- frontend/
 |   +-- Dockerfile
 |   +-- nginx/default.conf
+|   +-- vercel.json
 |   +-- src/
 |       +-- api/
 |       +-- auth/
@@ -131,6 +137,8 @@ smart-auto-logistics/
 |   +-- .env.production.example
 +-- docs/
 |   +-- SETUP_AND_RUN_GUIDE.md
+|   +-- VERCEL_ONLINE_DEPLOYMENT_GUIDE.md
++-- render.yaml
 +-- README.md
 +-- PROJECT_PROGRESS.md
 ```
@@ -219,6 +227,21 @@ $env:DB_PASSWORD="your-supabase-database-password"
 
 Keep the React frontend connected to the Spring Boot backend through
 `VITE_API_BASE_URL`. Do not put the Supabase database password in frontend code.
+
+## Online Deployment
+
+The recommended hosted architecture is:
+
+- Vercel for the React + Vite frontend
+- One always-on Render Docker web service for Spring Boot and its schedulers
+- Supabase PostgreSQL for persistent data
+- A public EVM test network only when online blockchain recording is enabled
+
+Do not deploy the current Spring Boot API as a scale-to-zero function. Automatic
+simulation and stock monitoring run every 5 and 30 seconds inside the backend,
+so the API must remain active and must use one application instance. Follow the
+[step-by-step Vercel guide](docs/VERCEL_ONLINE_DEPLOYMENT_GUIDE.md) for the
+deployment order, environment variables, CORS configuration, and verification.
 
 ## Production Deployment
 
@@ -449,6 +472,8 @@ order-notification, and deployment work:
 
 See [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md) for the full checklist. All
 functions selected in the IR gap-review scope are implemented and the automated
-test suite is green. Remaining sign-off work is manual UAT with current Supabase
-accounts, hosting-platform secrets/domain configuration when a host is chosen,
-and the planned final-report technology update from Vue.js to React + Vite.
+test suite is green. Remaining sign-off work is deploying the prepared Render
+backend and Vercel frontend, entering production secrets and domains, completing
+manual UAT with current Supabase accounts, enabling a durable public testnet if
+online blockchain recording is required, and updating the final report from
+Vue.js to React + Vite.
