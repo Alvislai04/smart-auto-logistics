@@ -33,11 +33,11 @@ services:
       - key: SPRING_JPA_SHOW_SQL
         value: "false"
       - key: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
-        value: "5"
+        value: "2"
       - key: SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE
-        value: "1"
+        value: "0"
       - key: SIMULATION_SCHEDULER_ENABLED
-        value: "true"
+        value: "false"
       - key: SIMULATION_SCHEDULER_DELAY_MS
         value: "5000"
       - key: SIMULATION_DEFAULT_INTERVAL_SECONDS

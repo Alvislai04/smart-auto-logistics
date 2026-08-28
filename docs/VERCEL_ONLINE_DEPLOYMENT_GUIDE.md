@@ -275,12 +275,31 @@ BLOCKCHAIN_ENABLED=true
 BLOCKCHAIN_RPC_URL=https://your-provider-rpc-url
 BLOCKCHAIN_CONTRACT_ADDRESS=0x...
 BLOCKCHAIN_PRIVATE_KEY=0x...
+BLOCKCHAIN_GAS_PRICE_WEI=0
 ```
 
 Use a dedicated deployment wallet with only test-network funds. Never expose
 the private key in GitHub, Vercel, frontend variables, screenshots, or logs.
 After changing the values, restart the backend and verify the administrator
 blockchain health page before processing important shipment events.
+
+The repository includes a Sepolia deployment target. From `blockchain`, store
+the secrets in the encrypted Hardhat keystore and deploy with the optimized
+production profile:
+
+```powershell
+npx hardhat keystore set SEPOLIA_RPC_URL
+npx hardhat keystore set SEPOLIA_PRIVATE_KEY
+npm run deploy:sepolia
+```
+
+Copy `contractAddress` from the generated, Git-ignored
+`blockchain/deployment.sepolia.json` into Render. Keep
+`BLOCKCHAIN_ENABLED=false` until all three blockchain secrets are present and
+the deployment transaction is confirmed. A gas price of `0` tells the backend
+to use the connected node's current price. The backend also reads and signs with
+the connected chain ID, so the transaction is protected against replay on a
+different Ethereum network.
 
 ## 10. Common Deployment Problems
 

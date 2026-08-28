@@ -465,6 +465,11 @@ Backend tests use a uniquely named in-memory H2 database configured in
 `backend/src/test/resources/application.properties`. Running `mvn test` does not
 connect to or change Supabase.
 
+The backend uses a deliberately small Hikari pool for Supabase session mode:
+two connections at most and no permanently idle connection. This keeps local,
+active Render, and rolling-deployment instances within the Free-plan session
+pool. Keep the JDBC URL on the Hibernate-compatible session pooler port `5432`.
+
 Smart contract compile and test:
 
 ```powershell

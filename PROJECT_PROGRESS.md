@@ -761,5 +761,22 @@ Completion date: 2026-08-28.
 - [x] Added chain-specific EIP-155 signing using the connected network chain ID
 - [x] Added focused chain ID and gas-price tests
 - [x] Clean backend build passed: 36 tests, 0 failures, 0 errors
-- [ ] Deploy the latest blockchain backend safeguards to Render
+- [x] Deployed the latest blockchain backend safeguards to Render
 - [ ] Enable blockchain integration and confirm `HEALTHY` network status
+
+## 27. Supabase Session Pool Recovery
+
+Completion date: 2026-08-28.
+
+- [x] Diagnosed the Render startup failure as Supabase session-pool exhaustion
+- [x] Confirmed 13 idle Spring Boot JDBC sessions consumed the 15-session pool
+- [x] Removed only the stale PostgreSQL JDBC sessions without touching Supabase
+  platform services or application data
+- [x] Reduced application, Render, and Docker Hikari defaults to 2 maximum and
+  0 minimum-idle connections
+- [x] Added explicit connection, idle, and maximum-lifetime defaults
+- [x] Kept Hibernate on the prepared-statement-compatible session pooler port
+  `5432`
+- [x] Applied the reduced Hikari settings in Render
+- [x] Confirmed the public Render Actuator endpoint reports `UP`
+- [ ] Recheck active JDBC counts after the deployment stabilizes
