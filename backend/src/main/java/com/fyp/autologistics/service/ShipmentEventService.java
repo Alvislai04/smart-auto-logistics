@@ -30,32 +30,6 @@ public class ShipmentEventService {
     }
 
     @Transactional
-    public ShipmentEventResponse createEvent(
-            Long shipmentId,
-            ShipmentEventType eventType,
-            String description,
-            String previousStatus,
-            String newStatus
-    ) {
-        Shipment shipment = shipmentService.findShipmentEntityById(shipmentId);
-
-        ShipmentEvent shipmentEvent = new ShipmentEvent();
-        shipmentEvent.setShipment(shipment);
-        shipmentEvent.setEventType(eventType);
-        shipmentEvent.setDescription(description);
-        shipmentEvent.setPreviousStatus(previousStatus);
-        shipmentEvent.setNewStatus(newStatus);
-        applyEventMetadata(
-                shipmentEvent,
-                null,
-                ShipmentEventSourceType.SYSTEM_AUTOMATION
-        );
-
-        ShipmentEvent savedEvent = shipmentEventRepository.save(shipmentEvent);
-        return mapToResponse(savedEvent);
-    }
-
-    @Transactional
     public ShipmentEventResponse createEventForShipment(
             Shipment shipment,
             ShipmentEventType eventType,

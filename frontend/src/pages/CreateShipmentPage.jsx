@@ -82,7 +82,9 @@ function CreateShipmentPage() {
   };
 
   const validateForm = () => {
-    const validationMessage = validateShipmentForm(formData);
+    const validationMessage = validateShipmentForm(formData, {
+      automaticDeparture: true,
+    });
 
     if (validationMessage) {
       setErrorMessage(validationMessage);
@@ -144,6 +146,7 @@ function CreateShipmentPage() {
       <ShipmentForm
         formData={formData}
         formOptions={formOptions}
+        isDepartureAutomatic
         isLoadingOptions={isLoadingOptions}
         isSubmitting={isSubmitting}
         submitButtonLabel="Create Shipment"

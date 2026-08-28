@@ -53,7 +53,7 @@ const ADMIN_OVERVIEW = {
     { key: "MODEL-DB-001", brand: "Mercedes-Benz", displayName: "Database Model" },
   ],
   logisticsStageOptions: [
-    { key: "STOCK_YARD", label: "Stock Yard" },
+    { key: "STOCK_YARD", displayName: "Stock Yard" },
   ],
 };
 
@@ -104,6 +104,9 @@ describe("StockMonitoringPage", () => {
     expect(
       screen.getByRole("option", { name: "Select vehicle model" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Stock Yard" })).toHaveValue(
+      "STOCK_YARD",
+    );
   });
 
   test("submits selected database keys and a numeric threshold", async () => {

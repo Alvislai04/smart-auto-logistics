@@ -1,12 +1,10 @@
 package com.fyp.autologistics.integration;
 
 import com.fyp.autologistics.entity.AppUser;
-import com.fyp.autologistics.entity.BlockchainRecord;
 import com.fyp.autologistics.entity.ShipmentEvent;
 import com.fyp.autologistics.entity.ShipmentPartyProfile;
 import com.fyp.autologistics.entity.VehicleModel;
 import com.fyp.autologistics.enums.AlertType;
-import com.fyp.autologistics.enums.BlockchainRecordStatus;
 import com.fyp.autologistics.enums.ShipmentEventSourceType;
 import com.fyp.autologistics.enums.ShipmentEventType;
 import com.fyp.autologistics.enums.UserRole;
@@ -28,6 +26,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -71,13 +72,20 @@ class ShipmentLifecycleIntegrationTests {
     @Autowired
     private AdminNotificationRepository adminNotificationRepository;
 
+    @Autowired
+    private Clock applicationClock;
+
     @Test
-    void authenticatedShipmentJourneyPreservesAuditAlertsAndBlockchainFailureEvidence()
+    void authenticatedShipmentJourneyPreservesAuditAlertsAndSkipsDisabledBlockchain()
             throws Exception {
         createReferenceDataAndUsers();
 
         String manufacturerToken = login(MANUFACTURER_EMAIL);
         String adminToken = login(ADMIN_EMAIL);
+        String estimatedArrival = LocalDateTime.now(applicationClock)
+                .plusDays(1)
+                .withNano(0)
+                .toString();
 
         String createResponse = mockMvc.perform(post("/api/shipments")
                         .header(HttpHeaders.AUTHORIZATION, bearer(manufacturerToken))
@@ -88,8 +96,7 @@ class ShipmentLifecycleIntegrationTests {
                                   "vehicleModelKey": "MODEL-INTEGRATION",
                                   "manufacturerKey": "MFG-INTEGRATION",
                                   "dealershipKey": "DLR-INTEGRATION",
-                                  "estimatedDeparture": "2026-08-19T09:00:00",
-                                  "estimatedArrival": "2026-08-20T17:00:00",
+                                  "estimatedArrival": "%s",
                                   "currentStage": "STOCK_YARD",
                                   "stockLocation": "Integration stock yard",
                                   "workInProgressStatus": "COMPLETED",
@@ -99,7 +106,7 @@ class ShipmentLifecycleIntegrationTests {
                                   "customerContact": "+60000000001",
                                   "customerAddress": "Integration-only address"
                                 }
-                                """))
+                                """.formatted(estimatedArrival)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CREATED"))
                 .andExpect(jsonPath("$.manufacturerKey").value("MFG-INTEGRATION"))
@@ -110,7 +117,13 @@ class ShipmentLifecycleIntegrationTests {
         Number shipmentIdValue = JsonPath.read(createResponse, "$.id");
         long shipmentId = shipmentIdValue.longValue();
         String shipmentCode = JsonPath.read(createResponse, "$.shipmentCode");
+        String estimatedDepartureValue = JsonPath.read(
+                createResponse,
+                "$.estimatedDeparture"
+        );
         assertThat(shipmentCode).startsWith("SHP-");
+        assertThat(LocalDateTime.parse(estimatedDepartureValue).toLocalDate())
+                .isEqualTo(LocalDate.now(applicationClock));
 
         mockMvc.perform(get("/api/shipments/{shipmentId}", shipmentId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(manufacturerToken)))
@@ -142,27 +155,10 @@ class ShipmentLifecycleIntegrationTests {
                 .extracting(alert -> alert.getAlertType())
                 .contains(AlertType.ORDER_UPDATE);
 
-        List<BlockchainRecord> failedRecords = blockchainRecordRepository
-                .findByShipmentIdOrderByRecordedAtDesc(shipmentId);
-        assertThat(failedRecords).hasSizeGreaterThanOrEqualTo(2);
-        assertThat(failedRecords)
-                .allMatch(record -> record.getStatus() == BlockchainRecordStatus.FAILED)
-                .allMatch(record -> record.getVerificationMessage()
-                        .contains("Blockchain integration is disabled"));
-        assertThat(adminNotificationRepository.count()).isGreaterThanOrEqualTo(2);
-
-        BlockchainRecord retryTarget = failedRecords.getFirst();
-        mockMvc.perform(post("/api/blockchain-records/{recordId}/retry", retryTarget.getId())
-                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("FAILED"))
-                .andExpect(jsonPath("$.retryCount").value(1));
-
-        BlockchainRecord retriedRecord = blockchainRecordRepository
-                .findById(retryTarget.getId())
-                .orElseThrow();
-        assertThat(retriedRecord.getRetryCount()).isEqualTo(1);
-        assertThat(retriedRecord.getLastRetryAt()).isNotNull();
+        assertThat(blockchainRecordRepository
+                .findByShipmentIdOrderByRecordedAtDesc(shipmentId))
+                .isEmpty();
+        assertThat(adminNotificationRepository.count()).isZero();
     }
 
     private String login(String email) throws Exception {

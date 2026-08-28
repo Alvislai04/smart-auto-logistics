@@ -77,6 +77,8 @@ Legend:
 - [x] Shipment creation restricted to manufacturer role
 - [x] Auto-generated unique shipment code
 - [x] Backend-controlled shipment code that users cannot edit from UI
+- [x] Backend-assigned shipment start timestamp on the creation day
+- [x] Shipment start is immutable and cannot be selected during create or edit
 - [x] Database-backed Mercedes-Benz vehicle model selection by unique model key
 - [x] Admin-managed vehicle model master data
 - [x] View all shipments
@@ -111,7 +113,7 @@ Legend:
 - [x] Planned origin and destination coordinates
 - [x] Dealership name
 - [x] Estimated arrival
-- [x] Estimated departure
+- [x] Immutable estimated departure assigned by the backend at shipment creation
 - [x] Current logistics stage
 - [x] Stock location
 - [x] Work-in-progress status
@@ -422,6 +424,8 @@ Legend:
   stock evaluation, order-update events, and blockchain retry/health
 - [x] Backend controller integration tests for stock authorization and validation
 - [x] Frontend component tests for stock and alert role flows
+- [x] Frontend shipment scheduling tests for automatic departure payload and ETA validation
+- [x] Authenticated shipment integration test verifies creation-day departure assignment
 - [x] End-to-end authenticated API happy path test
 - [x] End-to-end blockchain failure and retry path test
 - [x] Browser smoke test for blockchain monitor health, pagination, role controls,
@@ -673,3 +677,66 @@ Completion date: 2026-08-21.
 - [ ] Deploy the Render backend and record its final HTTPS URL
 - [ ] Deploy the Vercel frontend and record its final HTTPS URL
 - [ ] Complete authenticated production smoke testing with all four roles
+
+## 23. Conservative Dead-Code And Repository Cleanup
+
+Completion date: 2026-08-28.
+
+- [x] Built a parser-based frontend import graph from `src/main.jsx`
+- [x] Confirmed every production React module is reachable
+- [x] Confirmed disconnected JavaScript modules are only intentional tests and
+  test setup files
+- [x] Removed unused Vite starter CSS, image assets, SVG sprite, and template
+  frontend README
+- [x] Removed the unused Lombok dependency and Lombok-only Maven configuration
+- [x] Replaced empty generated Maven metadata with the application name and
+  description
+- [x] Removed the unreferenced manual blockchain-event request endpoint and DTO
+- [x] Removed eight unreferenced Spring Data repository query declarations
+- [x] Removed four unreferenced legacy service operations and their orphaned
+  shipment query
+- [x] Preserved backend-controlled automatic blockchain recording, verification,
+  retry, health monitoring, and shipment record lookup
+- [x] Preserved all shipment start-date functionality without cleanup edits
+- [x] Backend clean compile and all 30 tests passed
+- [x] Frontend ESLint, all 9 tests, and production build passed
+- [x] Hardhat Solidity tests passed: 2 tests, 0 failures
+
+## 24. Stock Monitoring Stage Dropdown Fix
+
+Completion date: 2026-08-28.
+
+- [x] Matched the frontend logistics-stage option label to the backend
+  `MasterDataOptionResponse.displayName` contract
+- [x] Added a component regression assertion for the visible `Stock Yard`
+  option and its `STOCK_YARD` key
+
+## 25. Blockchain Record Growth And Simulation Loop Fix
+
+Completion date: 2026-08-28.
+
+- [x] Audited live Supabase blockchain, shipment-event, tracking, notification,
+  and simulation-session counts without modifying production data
+- [x] Confirmed blockchain records were unique by shipment event and were not
+  database duplicates
+- [x] Identified disabled blockchain integration as the source of almost every
+  failed record
+- [x] Identified repeated completed-session recreation and alert/simulation
+  `DELAYED` to `IN_TRANSIT` oscillation as the event-volume source
+- [x] Disabled mode now skips automatic blockchain writes without failed rows or
+  admin notifications
+- [x] Automatic simulation provisioning now creates at most one session per
+  shipment, including completed-session history
+- [x] Normal telemetry no longer clears alert-engine delay status and restarts
+  the status-transition loop
+- [x] Added regression tests for disabled blockchain writes, completed-session
+  recreation, and delayed-status stability
+- [x] Full backend suite passed: 33 tests, 0 failures, 0 errors
+- [x] Frontend checks passed: 9 tests, ESLint, and production build
+- [x] Added a narrow, repeat-safe Supabase maintenance script that preserves
+  genuine recorded, pending, and verification-failure records
+- [ ] Deploy the corrected backend to Render
+- [ ] Run the maintenance script in Supabase after deployment
+- [ ] Re-enable the Render simulation scheduler and confirm stable record counts
+- [ ] Configure a public blockchain RPC, deployed contract, and funded signer if
+  online blockchain health is required

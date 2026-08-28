@@ -260,7 +260,7 @@ function StockMonitoringPage() {
                 <option value="">Select logistics stage</option>
                 {overview.logisticsStageOptions.map((stage) => (
                   <option key={stage.key} value={stage.key}>
-                    {stage.label}
+                    {stage.displayName}
                   </option>
                 ))}
               </select>

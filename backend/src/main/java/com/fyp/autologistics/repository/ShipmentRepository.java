@@ -3,7 +3,6 @@ package com.fyp.autologistics.repository;
 import com.fyp.autologistics.entity.Shipment;
 import com.fyp.autologistics.enums.LogisticsStage;
 import com.fyp.autologistics.enums.ShipmentStatus;
-import com.fyp.autologistics.enums.SimulationSessionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -23,16 +22,6 @@ public interface ShipmentRepository
 
     long countByStatus(ShipmentStatus status);
 
-    long countByManufacturerKey(String manufacturerKey);
-
-    long countByManufacturerKeyAndStatus(String manufacturerKey, ShipmentStatus status);
-
-    long countByDealershipKey(String dealershipKey);
-
-    long countByDealershipKeyAndStatus(String dealershipKey, ShipmentStatus status);
-
-    List<Shipment> findByStatusIn(Collection<ShipmentStatus> statuses);
-
     @Query("""
             select s
             from Shipment s
@@ -45,12 +34,10 @@ public interface ShipmentRepository
                   select 1
                   from SimulationSession ss
                   where ss.shipment = s
-                    and ss.status in :sessionStatuses
               )
             """)
-    List<Shipment> findShipmentsWithoutOpenSimulationSession(
-            @Param("shipmentStatuses") Collection<ShipmentStatus> shipmentStatuses,
-            @Param("sessionStatuses") Collection<SimulationSessionStatus> sessionStatuses
+    List<Shipment> findShipmentsWithoutSimulationSession(
+            @Param("shipmentStatuses") Collection<ShipmentStatus> shipmentStatuses
     );
 
     @Query("""

@@ -262,6 +262,7 @@ local Docker testing, keep:
 ```properties
 APP_PORT=8088
 APP_CORS_ALLOWED_ORIGINS=http://localhost:8088
+APP_TIME_ZONE=Asia/Kuala_Lumpur
 BLOCKCHAIN_ENABLED=false
 ```
 

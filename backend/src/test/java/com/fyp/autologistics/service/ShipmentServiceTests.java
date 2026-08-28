@@ -20,6 +20,9 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,6 +47,10 @@ class ShipmentServiceTests {
             mock(AuthenticatedUserService.class);
     private final ApplicationEventPublisher applicationEventPublisher =
             mock(ApplicationEventPublisher.class);
+    private final Clock applicationClock = Clock.fixed(
+            Instant.parse("2026-08-26T04:00:00Z"),
+            ZoneId.of("Asia/Kuala_Lumpur")
+    );
 
     private final ShipmentService shipmentService = new ShipmentService(
             shipmentRepository,
@@ -52,7 +59,8 @@ class ShipmentServiceTests {
             shipmentPartyProfileRepository,
             blockchainRecordService,
             authenticatedUserService,
-            applicationEventPublisher
+            applicationEventPublisher,
+            applicationClock
     );
 
     @Test

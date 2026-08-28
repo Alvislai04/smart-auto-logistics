@@ -4,6 +4,7 @@ import com.fyp.autologistics.blockchain.BlockchainHealthSnapshot;
 import com.fyp.autologistics.blockchain.BlockchainLedgerClient;
 import com.fyp.autologistics.blockchain.BlockchainLedgerException;
 import com.fyp.autologistics.blockchain.BlockchainTransactionReceipt;
+import com.fyp.autologistics.config.BlockchainProperties;
 import com.fyp.autologistics.dto.BlockchainHealthResponse;
 import com.fyp.autologistics.dto.BlockchainRecordResponse;
 import com.fyp.autologistics.entity.BlockchainRecord;
@@ -35,6 +36,7 @@ public class BlockchainRecordService {
     private final AdminNotificationService adminNotificationService;
     private final CompanyNotificationService companyNotificationService;
     private final IntegrityCaseService integrityCaseService;
+    private final BlockchainProperties blockchainProperties;
     private final BlockchainLedgerClient blockchainLedgerClient;
 
     public BlockchainRecordService(
@@ -43,6 +45,7 @@ public class BlockchainRecordService {
         AdminNotificationService adminNotificationService,
         CompanyNotificationService companyNotificationService,
         IntegrityCaseService integrityCaseService,
+        BlockchainProperties blockchainProperties,
         BlockchainLedgerClient blockchainLedgerClient
     ) {
         this.blockchainRecordRepository = blockchainRecordRepository;
@@ -50,37 +53,23 @@ public class BlockchainRecordService {
         this.adminNotificationService = adminNotificationService;
         this.companyNotificationService = companyNotificationService;
         this.integrityCaseService = integrityCaseService;
+        this.blockchainProperties = blockchainProperties;
         this.blockchainLedgerClient = blockchainLedgerClient;
     }
 
     @Transactional
-    public BlockchainRecordResponse recordShipmentEvent(
-            Long shipmentId,
-            Long shipmentEventId,
-            String eventPayload
+    public Optional<BlockchainRecordResponse> recordShipmentEventAutomatically(
+            ShipmentEvent shipmentEvent
     ) {
-        if (blockchainRecordRepository.existsByShipmentEventId(shipmentEventId)) {
-            throw new BadRequestException("This shipment event is already recorded on blockchain.");
+        if (!blockchainProperties.isEnabled()) {
+            return Optional.empty();
         }
 
-        String eventHash = generateSha256Hash(eventPayload);
-
-        BlockchainRecord savedRecord = saveRecordWithLedgerResult(
-                shipmentId,
-                shipmentEventId,
-                eventHash
-        );
-
-        return mapToResponse(savedRecord);
-    }
-
-    @Transactional
-    public BlockchainRecordResponse recordShipmentEventAutomatically(ShipmentEvent shipmentEvent) {
         Optional<BlockchainRecord> existingRecord =
                 blockchainRecordRepository.findByShipmentEventId(shipmentEvent.getId());
 
         if (existingRecord.isPresent()) {
-            return mapToResponse(existingRecord.get());
+            return Optional.of(mapToResponse(existingRecord.get()));
         }
 
         String eventPayload = buildEventPayload(shipmentEvent);
@@ -92,7 +81,7 @@ public class BlockchainRecordService {
                 eventHash
         );
 
-        return mapToResponse(savedRecord);
+        return Optional.of(mapToResponse(savedRecord));
     }
 
     @Transactional(readOnly = true)

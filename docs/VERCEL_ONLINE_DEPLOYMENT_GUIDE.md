@@ -64,6 +64,7 @@ Keep these values ready. Do not put them in source files.
 | `DB_USERNAME` | `postgres.YOUR_PROJECT_REF` |
 | `DB_PASSWORD` | Supabase database password |
 | `APP_CORS_ALLOWED_ORIGINS` | Exact Vercel HTTPS origin, added after Vercel deploy |
+| `APP_TIME_ZONE` | `Asia/Kuala_Lumpur` for automatic shipment start timestamps |
 | `VITE_API_BASE_URL` | Render HTTPS API URL ending in `/api` |
 
 Session Pooler format:
@@ -98,6 +99,7 @@ DB_URL                         your Supabase JDBC Session Pooler URL
 DB_USERNAME                    postgres.YOUR_PROJECT_REF
 DB_PASSWORD                    your Supabase database password
 APP_CORS_ALLOWED_ORIGINS       http://localhost:5173
+APP_TIME_ZONE                  Asia/Kuala_Lumpur
 ```
 
 The localhost CORS value is temporary until the Vercel URL exists. Render

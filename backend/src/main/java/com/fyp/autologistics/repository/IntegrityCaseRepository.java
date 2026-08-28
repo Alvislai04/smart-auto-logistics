@@ -15,5 +15,4 @@ public interface IntegrityCaseRepository extends JpaRepository<IntegrityCase, Lo
 
     Optional<IntegrityCase> findByBlockchainRecordId(Long blockchainRecordId);
 
-    boolean existsByBlockchainRecordId(Long blockchainRecordId);
 }

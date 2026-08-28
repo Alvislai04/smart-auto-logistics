@@ -32,6 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -72,6 +73,7 @@ public class ShipmentService {
     private final BlockchainRecordService blockchainRecordService;
     private final AuthenticatedUserService authenticatedUserService;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final Clock applicationClock;
 
     public ShipmentService(
             ShipmentRepository shipmentRepository,
@@ -80,7 +82,8 @@ public class ShipmentService {
             ShipmentPartyProfileRepository shipmentPartyProfileRepository,
             BlockchainRecordService blockchainRecordService,
             AuthenticatedUserService authenticatedUserService,
-            ApplicationEventPublisher applicationEventPublisher
+            ApplicationEventPublisher applicationEventPublisher,
+            Clock applicationClock
     ) {
         this.shipmentRepository = shipmentRepository;
         this.shipmentEventRepository = shipmentEventRepository;
@@ -89,12 +92,14 @@ public class ShipmentService {
         this.blockchainRecordService = blockchainRecordService;
         this.authenticatedUserService = authenticatedUserService;
         this.applicationEventPublisher = applicationEventPublisher;
+        this.applicationClock = applicationClock;
     }
 
     @Transactional
     public ShipmentResponse createShipment(CreateShipmentRequest request, String actorEmail) {
         AppUser actor = authenticatedUserService.getAuthenticatedUser(actorEmail);
-        validateShipmentSchedule(request);
+        LocalDateTime estimatedDeparture = LocalDateTime.now(applicationClock).withNano(0);
+        validateShipmentSchedule(estimatedDeparture, request.getEstimatedArrival());
         VehicleModel vehicleModel = findActiveVehicleModel(request.getVehicleModelKey());
 
         ShipmentPartyProfile manufacturer = findActiveParty(
@@ -122,7 +127,7 @@ public class ShipmentService {
         shipment.setDestinationLongitude(resolveLongitude(dealership, "Dealership destination"));
         shipment.setDealershipName(resolvePartyName(dealership));
         shipment.setEstimatedArrival(request.getEstimatedArrival());
-        shipment.setEstimatedDeparture(request.getEstimatedDeparture());
+        shipment.setEstimatedDeparture(estimatedDeparture);
         shipment.setCurrentStage(request.getCurrentStage());
         shipment.setStockLocation(normalizeText(request.getStockLocation()));
         shipment.setWorkInProgressStatus(request.getWorkInProgressStatus());
@@ -151,13 +156,6 @@ public class ShipmentService {
         applicationEventPublisher.publishEvent(new ShipmentCreatedEvent(savedShipment.getId()));
 
         return mapToResponse(savedShipment);
-    }
-
-    public List<ShipmentResponse> getAllShipments() {
-        return shipmentRepository.findAll()
-                .stream()
-                .map(this::mapToResponse)
-                .toList();
     }
 
     public ShipmentPageResponse searchShipments(
@@ -196,7 +194,7 @@ public class ShipmentService {
         AppUser actor = authenticatedUserService.getAuthenticatedUser(actorEmail);
 
         validateShipmentEditAllowed(shipment, actor, request.getManufacturerKey());
-        validateShipmentSchedule(request);
+        validateShipmentSchedule(shipment.getEstimatedDeparture(), request.getEstimatedArrival());
 
         VehicleModel vehicleModel = findActiveVehicleModel(request.getVehicleModelKey());
         ShipmentPartyProfile manufacturer = findActiveParty(
@@ -262,8 +260,6 @@ public class ShipmentService {
                 destinationLongitude);
         trackChange(changedFields, "dealership name", shipment.getDealershipName(),
                 dealershipName);
-        trackChange(changedFields, "estimated departure", shipment.getEstimatedDeparture(),
-                request.getEstimatedDeparture());
         trackChange(changedFields, "estimated arrival", shipment.getEstimatedArrival(),
                 request.getEstimatedArrival());
         trackChange(changedFields, "logistics stage", shipment.getCurrentStage(),
@@ -301,7 +297,6 @@ public class ShipmentService {
         shipment.setDestinationLongitude(destinationLongitude);
         shipment.setDealershipName(dealershipName);
         shipment.setEstimatedArrival(request.getEstimatedArrival());
-        shipment.setEstimatedDeparture(request.getEstimatedDeparture());
         shipment.setCurrentStage(request.getCurrentStage());
         shipment.setStockLocation(stockLocation);
         shipment.setWorkInProgressStatus(request.getWorkInProgressStatus());
@@ -430,10 +425,6 @@ public class ShipmentService {
     public Shipment findShipmentEntityById(Long id) {
         return shipmentRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Shipment not found with id: " + id));
-    }
-
-    public Shipment saveShipmentEntity(Shipment shipment) {
-        return shipmentRepository.save(shipment);
     }
 
     public Shipment updateSystemStatus(
@@ -567,20 +558,6 @@ public class ShipmentService {
                     "Manufacturers can only edit shipments linked to their own company profile."
             );
         }
-    }
-
-    private void validateShipmentSchedule(CreateShipmentRequest request) {
-        validateShipmentSchedule(
-                request.getEstimatedDeparture(),
-                request.getEstimatedArrival()
-        );
-    }
-
-    private void validateShipmentSchedule(UpdateShipmentRequest request) {
-        validateShipmentSchedule(
-                request.getEstimatedDeparture(),
-                request.getEstimatedArrival()
-        );
     }
 
     private void validateShipmentSchedule(

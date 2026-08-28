@@ -4,6 +4,7 @@ import com.fyp.autologistics.blockchain.BlockchainHealthSnapshot;
 import com.fyp.autologistics.blockchain.BlockchainLedgerClient;
 import com.fyp.autologistics.blockchain.BlockchainLedgerException;
 import com.fyp.autologistics.blockchain.BlockchainTransactionReceipt;
+import com.fyp.autologistics.config.BlockchainProperties;
 import com.fyp.autologistics.dto.BlockchainHealthResponse;
 import com.fyp.autologistics.dto.BlockchainRecordResponse;
 import com.fyp.autologistics.entity.BlockchainRecord;
@@ -41,6 +42,7 @@ class BlockchainRecordServiceTests {
     private final CompanyNotificationService companyNotificationService =
             mock(CompanyNotificationService.class);
     private final IntegrityCaseService integrityCaseService = mock(IntegrityCaseService.class);
+    private final BlockchainProperties blockchainProperties = enabledBlockchainProperties();
     private final BlockchainLedgerClient blockchainLedgerClient = mock(BlockchainLedgerClient.class);
 
     private final BlockchainRecordService blockchainRecordService = new BlockchainRecordService(
@@ -49,6 +51,7 @@ class BlockchainRecordServiceTests {
             adminNotificationService,
             companyNotificationService,
             integrityCaseService,
+            blockchainProperties,
             blockchainLedgerClient
     );
 
@@ -70,8 +73,9 @@ class BlockchainRecordServiceTests {
                 .thenThrow(new BlockchainLedgerException("Node unavailable."))
                 .thenReturn(new BlockchainTransactionReceipt("0xabc123", 42L));
 
-        BlockchainRecordResponse initialResponse =
-                blockchainRecordService.recordShipmentEventAutomatically(shipmentEvent);
+        BlockchainRecordResponse initialResponse = blockchainRecordService
+                .recordShipmentEventAutomatically(shipmentEvent)
+                .orElseThrow();
         BlockchainRecord failedRecord = savedRecordReference.get();
 
         assertThat(initialResponse.getStatus()).isEqualTo(BlockchainRecordStatus.FAILED);
@@ -165,6 +169,36 @@ class BlockchainRecordServiceTests {
         assertThat(response.chainId()).isEqualTo(31337L);
         assertThat(response.latestBlockNumber()).isEqualTo(120L);
         assertThat(response.checkedAt()).isNotNull();
+    }
+
+    @Test
+    void disabledBlockchainDoesNotCreateFailedRecordsOrNotifications() {
+        BlockchainProperties disabledProperties = new BlockchainProperties();
+        disabledProperties.setEnabled(false);
+        BlockchainRecordService disabledService = new BlockchainRecordService(
+                blockchainRecordRepository,
+                shipmentEventRepository,
+                adminNotificationService,
+                companyNotificationService,
+                integrityCaseService,
+                disabledProperties,
+                blockchainLedgerClient
+        );
+
+        assertThat(disabledService.recordShipmentEventAutomatically(buildShipmentEvent()))
+                .isEmpty();
+
+        verify(blockchainRecordRepository, never()).save(any(BlockchainRecord.class));
+        verify(blockchainLedgerClient, never()).recordShipmentEvent(any(), any(), any());
+        verify(adminNotificationService, never()).createUnreadNotificationIfNotExists(
+                any(), any(), any(), any(), any()
+        );
+    }
+
+    private BlockchainProperties enabledBlockchainProperties() {
+        BlockchainProperties properties = new BlockchainProperties();
+        properties.setEnabled(true);
+        return properties;
     }
 
     private ShipmentEvent buildShipmentEvent() {

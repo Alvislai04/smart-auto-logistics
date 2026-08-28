@@ -19,8 +19,6 @@ public interface BlockchainRecordRepository extends JpaRepository<BlockchainReco
 
     Optional<BlockchainRecord> findByShipmentEventId(Long shipmentEventId);
 
-    boolean existsByShipmentEventId(Long shipmentEventId);
-
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select record from BlockchainRecord record where record.id = :recordId")
     Optional<BlockchainRecord> findByIdForUpdate(@Param("recordId") Long recordId);

@@ -3,6 +3,7 @@ function ShipmentForm({
   formOptions,
   shipmentCode = "",
   isReadOnly = false,
+  isDepartureAutomatic = false,
   isLoadingOptions,
   isSubmitting,
   submitButtonLabel,
@@ -133,13 +134,16 @@ function ShipmentForm({
 
         <div className="form-grid">
           <label>
-            Estimated Departure
+            Shipment Start
             <input
-              type="datetime-local"
-              name="estimatedDeparture"
-              value={formData.estimatedDeparture}
-              onChange={onChange}
-              disabled={isReadOnly}
+              className="readonly-input"
+              type={isDepartureAutomatic ? "text" : "datetime-local"}
+              value={
+                isDepartureAutomatic
+                  ? "Assigned automatically when saved"
+                  : formData.estimatedDeparture
+              }
+              readOnly
               required
             />
           </label>

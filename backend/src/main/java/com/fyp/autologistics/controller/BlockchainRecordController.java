@@ -2,9 +2,7 @@ package com.fyp.autologistics.controller;
 
 import com.fyp.autologistics.dto.BlockchainRecordResponse;
 import com.fyp.autologistics.dto.BlockchainHealthResponse;
-import com.fyp.autologistics.dto.RecordBlockchainEventRequest;
 import com.fyp.autologistics.service.BlockchainRecordService;
-import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,17 +15,6 @@ public class BlockchainRecordController {
 
     public BlockchainRecordController(BlockchainRecordService blockchainRecordService) {
         this.blockchainRecordService = blockchainRecordService;
-    }
-
-    @PostMapping
-    public BlockchainRecordResponse recordShipmentEvent(
-            @Valid @RequestBody RecordBlockchainEventRequest request
-    ) {
-        return blockchainRecordService.recordShipmentEvent(
-                request.getShipmentId(),
-                request.getShipmentEventId(),
-                request.getEventPayload()
-        );
     }
 
     @GetMapping

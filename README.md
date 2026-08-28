@@ -43,6 +43,8 @@ The project currently includes:
 - Shipment detail editing for admin and linked manufacturer accounts before
   pickup or in-transit tracking begins
 - Auto-generated unique shipment codes controlled by the backend
+- Backend-assigned immutable shipment start time based on the configured
+  application timezone; users cannot select a past or future start date
 - Database-backed Mercedes-Benz vehicle model dropdown for shipment creation
 - Database-backed manufacturer origin and dealership destination dropdowns using
   stable `model_code` and `party_key` values
@@ -63,6 +65,8 @@ The project currently includes:
   route deviation, sensor warning, and progress shortfall
 - Automatic low-stock monitoring based on database-managed company/model/stage
   rules and live non-cancelled shipment quantities
+- Stock rules scoped by company, vehicle model, and logistics stage, with
+  API-backed stage labels in the administrator form
 - Automatic order-update alerts for manual, alert-engine, and IoT-simulation
   shipment status changes
 - Role-scoped Stock Monitoring page for administrators, manufacturers, and
@@ -93,6 +97,13 @@ For public internet deployment, follow the
 [Vercel online deployment guide](docs/VERCEL_ONLINE_DEPLOYMENT_GUIDE.md). The
 frontend runs on Vercel while the scheduler-dependent Spring Boot API runs as
 one Render container connected to Supabase.
+
+The repository was conservatively audited for dead code on 2026-08-28. Unused
+Vite template assets, template documentation, the unused Lombok dependency, and
+an unreferenced manual blockchain-event endpoint were removed. Shipment events
+continue to be recorded automatically through the backend-controlled audit and
+blockchain pipeline. The cleanup was verified with a clean backend compile, all
+backend and frontend tests, frontend lint/build checks, and the Solidity tests.
 
 ## Project Structure
 
@@ -163,6 +174,8 @@ blockchain private keys, or first-admin credentials.
 
 The exact variables and safe secret-generation command are documented in the
 [setup guide](docs/SETUP_AND_RUN_GUIDE.md#5-configure-local-development).
+`APP_TIME_ZONE` defaults to `Asia/Kuala_Lumpur` and controls the automatic
+shipment start timestamp in local, Docker, and Render deployments.
 
 ## Supabase PostgreSQL Setup
 
@@ -354,6 +367,11 @@ Manufacturer creates shipment with route coordinates
 -> Session completes when destination or max event limit is reached
 ```
 
+The automatic scheduler creates at most one system-managed session for each
+shipment. A completed session is retained as history and is not recreated.
+Alert-engine delay decisions are also retained until a later lifecycle action;
+normal telemetry does not repeatedly toggle the shipment back to `IN_TRANSIT`.
+
 ### Account Management Workflow
 
 ```text
@@ -379,11 +397,29 @@ Important shipment event occurs
 -> Failed verification creates admin/company integrity notifications
 ```
 
-If the blockchain node or contract is not configured, the backend does not
-generate fake transaction data. The blockchain record is saved as `FAILED` with
-a clear message for admin review. Retry is enabled only when the health endpoint
-reports the node, deployed contract, and signer as ready. Records that already
-have an on-chain transaction are never eligible for another write.
+When blockchain integration is disabled, automatic shipment-event anchoring is
+skipped and no failed blockchain record or admin notification is created. When
+the integration is enabled but a real ledger write fails, the record is saved as
+`FAILED` with a clear message for admin review. Retry is enabled only when the
+health endpoint reports the node, deployed contract, and signer as ready.
+Records that already have an on-chain transaction are never eligible for another
+write.
+
+The monitor correctly reports `DISABLED` while `BLOCKCHAIN_ENABLED=false`. An
+online deployment becomes healthy only after it is configured with an
+internet-reachable RPC endpoint, a deployed `ShipmentLedger` contract address,
+and a funded signer private key. A Render service cannot use a blockchain node
+running only on the developer computer at `127.0.0.1`.
+
+### Disabled Blockchain Failure Cleanup
+
+Older application versions stored one failed blockchain row for every automatic
+shipment event while blockchain integration was disabled. After deploying the
+current backend, run
+[`database/maintenance/2026-08-28-remove-disabled-blockchain-failures.sql`](database/maintenance/2026-08-28-remove-disabled-blockchain-failures.sql)
+once in the Supabase SQL Editor. The script removes only that exact disabled-mode
+failure and its linked admin notification; legitimate recorded, pending,
+verification-failure, and shipment-event data is preserved.
 
 ## Useful Commands
 
@@ -469,6 +505,14 @@ order-notification, and deployment work:
 - Added a reusable UAT checklist and dated automated test report
 - Re-audited the approved IR gap-review scope and found no remaining code
   implementation gaps
+- Diagnosed production blockchain-record growth caused by completed simulation
+  recreation and `DELAYED`/`IN_TRANSIT` status oscillation
+- Prevented repeat simulation sessions and retained alert-engine delay state
+- Changed disabled blockchain mode to skip automatic writes without creating
+  failed records or notifications
+- Added focused regression coverage and a conservative Supabase cleanup script
+- Verified 33 backend tests, 9 frontend tests, frontend lint, and the production
+  frontend build
 
 ## Known Remaining Work
 

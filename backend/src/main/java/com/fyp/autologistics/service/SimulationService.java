@@ -47,11 +47,6 @@ public class SimulationService {
             ShipmentStatus.IN_TRANSIT,
             ShipmentStatus.DELAYED
     );
-    private static final List<SimulationSessionStatus> OPEN_SESSION_STATUSES = List.of(
-            SimulationSessionStatus.ACTIVE,
-            SimulationSessionStatus.PAUSED
-    );
-
     private final ShipmentService shipmentService;
     private final TrackingEventService trackingEventService;
     private final TrackingEventRepository trackingEventRepository;
@@ -155,10 +150,7 @@ public class SimulationService {
             List<SimulationProfile> profiles
     ) {
         shipmentRepository
-                .findShipmentsWithoutOpenSimulationSession(
-                        SYSTEM_SIMULATED_SHIPMENT_STATUSES,
-                        OPEN_SESSION_STATUSES
-                )
+                .findShipmentsWithoutSimulationSession(SYSTEM_SIMULATED_SHIPMENT_STATUSES)
                 .forEach(shipment -> createSystemSessionIfMissing(shipment, now, profiles));
     }
 
@@ -172,9 +164,8 @@ public class SimulationService {
         }
 
         Optional<SimulationSession> existingSession =
-                simulationSessionRepository.findFirstByShipmentIdAndStatusInOrderByCreatedAtDesc(
-                        shipment.getId(),
-                        OPEN_SESSION_STATUSES
+                simulationSessionRepository.findFirstByShipmentIdOrderByUpdatedAtDesc(
+                        shipment.getId()
                 );
 
         if (existingSession.isPresent()) {
@@ -310,16 +301,6 @@ public class SimulationService {
             return;
         }
 
-        if (conditionStatus == ConditionStatus.NORMAL
-                && shipment.getStatus() == ShipmentStatus.DELAYED) {
-            shipmentService.updateSystemStatus(
-                    shipment,
-                    ShipmentStatus.IN_TRANSIT,
-                    LogisticsStage.IN_TRANSIT,
-                    ShipmentEventSourceType.IOT_SIMULATION,
-                    "System simulation detected that normal transit resumed."
-            );
-        }
     }
 
     private TrackingEventResponse createTrackingEvent(

@@ -5,7 +5,7 @@ import { useToast } from "../components/feedback/ToastContext";
 import { formatEnumLabel } from "../utils/formatters";
 
 const emptyProfileForm = {
-  fullName: "",
+  fullName: "alvis",
   email: "",
   role: "",
   companyName: "",
@@ -70,7 +70,9 @@ function AccountSettingsPage() {
       });
       updateCurrentUser(profile);
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, "Failed to load account profile."));
+      setErrorMessage(
+        getErrorMessage(error, "Failed to load account profile."),
+      );
     } finally {
       setIsLoading(false);
     }
@@ -214,7 +216,10 @@ function AccountSettingsPage() {
       {successMessage && <p className="success-message">{successMessage}</p>}
 
       <div className="account-settings-layout">
-        <form className="form-panel account-form" onSubmit={handleProfileSubmit}>
+        <form
+          className="form-panel account-form"
+          onSubmit={handleProfileSubmit}
+        >
           <div className="form-section-header">
             <h3>Profile</h3>
           </div>

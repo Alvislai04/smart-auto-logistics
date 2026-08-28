@@ -165,7 +165,6 @@ export function buildShipmentPayload(formData) {
     vehicleVin: formData.vehicleVin.trim(),
     vehicleModelKey: formData.vehicleModelKey,
     estimatedArrival: formData.estimatedArrival,
-    estimatedDeparture: formData.estimatedDeparture,
     currentStage: formData.currentStage,
     stockLocation: formData.stockLocation.trim(),
     workInProgressStatus: formData.workInProgressStatus,
@@ -180,14 +179,16 @@ export function buildShipmentPayload(formData) {
   };
 }
 
-export function validateShipmentForm(formData) {
+export function validateShipmentForm(
+  formData,
+  { automaticDeparture = false } = {},
+) {
   const requiredFields = [
     "manufacturerKey",
     "dealershipKey",
     "vehicleVin",
     "vehicleModelKey",
     "estimatedArrival",
-    "estimatedDeparture",
     "currentStage",
     "stockLocation",
     "workInProgressStatus",
@@ -210,9 +211,16 @@ export function validateShipmentForm(formData) {
     return "Please select a valid manufacturer and dealership.";
   }
 
-  if (
-    new Date(formData.estimatedArrival) <= new Date(formData.estimatedDeparture)
-  ) {
+  if (!automaticDeparture && !formData.estimatedDeparture) {
+    return "Please complete all required fields.";
+  }
+
+  const estimatedDeparture = automaticDeparture
+    ? new Date()
+    : new Date(formData.estimatedDeparture);
+  const estimatedArrival = new Date(formData.estimatedArrival);
+
+  if (estimatedArrival <= estimatedDeparture) {
     return "Estimated arrival must be after estimated departure.";
   }
 

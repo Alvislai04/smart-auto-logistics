@@ -24,9 +24,6 @@ public class UpdateShipmentRequest {
     @NotNull(message = "Estimated arrival is required")
     private LocalDateTime estimatedArrival;
 
-    @NotNull(message = "Estimated departure is required")
-    private LocalDateTime estimatedDeparture;
-
     @NotNull(message = "Current logistics stage is required")
     private LogisticsStage currentStage;
 
@@ -91,14 +88,6 @@ public class UpdateShipmentRequest {
 
     public void setEstimatedArrival(LocalDateTime estimatedArrival) {
         this.estimatedArrival = estimatedArrival;
-    }
-
-    public LocalDateTime getEstimatedDeparture() {
-        return estimatedDeparture;
-    }
-
-    public void setEstimatedDeparture(LocalDateTime estimatedDeparture) {
-        this.estimatedDeparture = estimatedDeparture;
     }
 
     public LogisticsStage getCurrentStage() {

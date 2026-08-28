@@ -198,11 +198,6 @@ public class AlertService {
         alertRepository.save(alert);
     }
 
-    public void evaluateAllActiveShipmentAlerts() {
-        shipmentRepository.findByStatusIn(MONITORED_STATUSES)
-                .forEach(this::evaluateShipmentMonitoringRules);
-    }
-
     public void evaluateShipmentMonitoringRules(Long shipmentId) {
         Shipment shipment = shipmentService.findShipmentEntityById(shipmentId);
         evaluateShipmentMonitoringRules(shipment);
