@@ -50,3 +50,13 @@ services:
         value: "30000"
       - key: BLOCKCHAIN_ENABLED
         value: "false"
+      - key: BLOCKCHAIN_RPC_URL
+        sync: false
+      - key: BLOCKCHAIN_CONTRACT_ADDRESS
+        sync: false
+      - key: BLOCKCHAIN_PRIVATE_KEY
+        sync: false
+      - key: BLOCKCHAIN_GAS_PRICE_WEI
+        value: "0"
+      - key: BLOCKCHAIN_GAS_LIMIT
+        value: "250000"

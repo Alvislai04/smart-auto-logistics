@@ -411,6 +411,14 @@ internet-reachable RPC endpoint, a deployed `ShipmentLedger` contract address,
 and a funded signer private key. A Render service cannot use a blockchain node
 running only on the developer computer at `127.0.0.1`.
 
+The Hardhat workspace includes an environment-backed Sepolia network and an
+optimized `npm run deploy:sepolia` command. Deployment secrets are stored in
+Hardhat's encrypted user keystore, while the generated
+`blockchain/deployment.sepolia.json` output remains outside version control.
+For hosted transactions, the backend obtains the connected network's chain ID
+and current gas price before signing. `BLOCKCHAIN_GAS_PRICE_WEI=0` enables this
+automatic pricing; a positive value remains available as an explicit override.
+
 ### Disabled Blockchain Failure Cleanup
 
 Older application versions stored one failed blockchain row for every automatic
@@ -419,7 +427,9 @@ current backend, run
 [`database/maintenance/2026-08-28-remove-disabled-blockchain-failures.sql`](database/maintenance/2026-08-28-remove-disabled-blockchain-failures.sql)
 once in the Supabase SQL Editor. The script removes only that exact disabled-mode
 failure and its linked admin notification; legitimate recorded, pending,
-verification-failure, and shipment-event data is preserved.
+verification-failure, and shipment-event data is preserved. It uses direct
+table joins and does not rely on temporary tables that may be dropped between
+Supabase SQL Editor statements.
 
 ## Useful Commands
 
@@ -513,13 +523,15 @@ order-notification, and deployment work:
 - Added focused regression coverage and a conservative Supabase cleanup script
 - Verified 33 backend tests, 9 frontend tests, frontend lint, and the production
   frontend build
+- Added secure Sepolia deployment support and verified both Solidity tests
+- Added Sepolia-safe EIP-155 transaction signing and node-provided gas pricing
+- Verified the clean backend build with 36 tests and no failures
 
 ## Known Remaining Work
 
 See [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md) for the full checklist. All
 functions selected in the IR gap-review scope are implemented and the automated
-test suite is green. Remaining sign-off work is deploying the prepared Render
-backend and Vercel frontend, entering production secrets and domains, completing
-manual UAT with current Supabase accounts, enabling a durable public testnet if
-online blockchain recording is required, and updating the final report from
-Vue.js to React + Vite.
+test suite is green. Remaining sign-off work is deploying the latest prepared
+backend, enabling and smoke-testing the configured Sepolia integration,
+completing manual UAT with current Supabase accounts, and updating the final
+report from Vue.js to React + Vite.

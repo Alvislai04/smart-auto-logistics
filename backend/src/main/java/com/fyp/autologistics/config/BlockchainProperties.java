@@ -17,7 +17,7 @@ public class BlockchainProperties {
 
     private String privateKey;
 
-    private BigInteger gasPriceWei = BigInteger.valueOf(20_000_000_000L);
+    private BigInteger gasPriceWei = BigInteger.ZERO;
 
     private BigInteger gasLimit = BigInteger.valueOf(250_000L);
 

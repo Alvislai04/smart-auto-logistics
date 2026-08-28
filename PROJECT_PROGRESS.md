@@ -735,8 +735,31 @@ Completion date: 2026-08-28.
 - [x] Frontend checks passed: 9 tests, ESLint, and production build
 - [x] Added a narrow, repeat-safe Supabase maintenance script that preserves
   genuine recorded, pending, and verification-failure records
+- [x] Made the maintenance script compatible with Supabase SQL Editor statement
+  boundaries without temporary-table dependencies
 - [ ] Deploy the corrected backend to Render
 - [ ] Run the maintenance script in Supabase after deployment
 - [ ] Re-enable the Render simulation scheduler and confirm stable record counts
 - [ ] Configure a public blockchain RPC, deployed contract, and funded signer if
   online blockchain health is required
+
+## 26. Sepolia Online Blockchain Deployment Readiness
+
+Completion date: 2026-08-28.
+
+- [x] Added an environment-backed Ethereum Sepolia network to Hardhat
+- [x] Added encrypted-keystore support for the Sepolia RPC and signer key
+- [x] Added an optimized `npm run deploy:sepolia` command
+- [x] Made deployment output network-specific and excluded it from Git
+- [x] Documented the local-versus-Sepolia architecture and Render handoff
+- [x] Contract compile passed and both Solidity tests passed
+- [x] Deployed `ShipmentLedger` to Sepolia at
+  `0x2e4ffA008f8310cE3405907804Fb95234A236Cb1` in block `11583086`
+- [x] Configured Render with the RPC URL, contract address, and signer key
+- [x] Added network-derived gas pricing with an explicit positive-value
+  override
+- [x] Added chain-specific EIP-155 signing using the connected network chain ID
+- [x] Added focused chain ID and gas-price tests
+- [x] Clean backend build passed: 36 tests, 0 failures, 0 errors
+- [ ] Deploy the latest blockchain backend safeguards to Render
+- [ ] Enable blockchain integration and confirm `HEALTHY` network status

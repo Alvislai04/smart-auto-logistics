@@ -19,6 +19,7 @@ import org.web3j.protocol.core.methods.response.EthCall;
 import org.web3j.protocol.core.methods.response.EthBlockNumber;
 import org.web3j.protocol.core.methods.response.EthChainId;
 import org.web3j.protocol.core.methods.response.EthGetCode;
+import org.web3j.protocol.core.methods.response.EthGasPrice;
 import org.web3j.protocol.core.methods.response.EthSendTransaction;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
@@ -50,7 +51,13 @@ public class Web3jBlockchainLedgerClient implements BlockchainLedgerClient {
 
         try (Web3j web3j = buildWeb3j()) {
             Credentials credentials = Credentials.create(normalizePrivateKey(properties.getPrivateKey()));
-            TransactionManager transactionManager = new RawTransactionManager(web3j, credentials);
+            long chainId = resolveChainId(web3j);
+            BigInteger gasPriceWei = resolveGasPriceWei(web3j);
+            TransactionManager transactionManager = new RawTransactionManager(
+                    web3j,
+                    credentials,
+                    chainId
+            );
 
             Function function = new Function(
                     "recordShipmentEvent",
@@ -64,7 +71,7 @@ public class Web3jBlockchainLedgerClient implements BlockchainLedgerClient {
 
             String encodedFunction = FunctionEncoder.encode(function);
             EthSendTransaction sentTransaction = transactionManager.sendTransaction(
-                    properties.getGasPriceWei(),
+                    gasPriceWei,
                     properties.getGasLimit(),
                     properties.getContractAddress(),
                     encodedFunction,
@@ -319,6 +326,48 @@ public class Web3jBlockchainLedgerClient implements BlockchainLedgerClient {
                 && !"0x".equalsIgnoreCase(contractCode)
                 && !"0x0".equalsIgnoreCase(contractCode)
                 && !"0x00".equalsIgnoreCase(contractCode);
+    }
+
+    long resolveChainId(Web3j web3j) throws Exception {
+        EthChainId response = web3j.ethChainId().send();
+
+        if (response.hasError()) {
+            throw new BlockchainLedgerException(
+                    "Chain ID request failed: " + response.getError().getMessage()
+            );
+        }
+
+        BigInteger chainId = response.getChainId();
+        if (chainId == null || chainId.signum() <= 0) {
+            throw new BlockchainLedgerException("Blockchain node returned an invalid chain ID.");
+        }
+
+        try {
+            return chainId.longValueExact();
+        } catch (ArithmeticException exception) {
+            throw new BlockchainLedgerException("Blockchain chain ID is too large.", exception);
+        }
+    }
+
+    BigInteger resolveGasPriceWei(Web3j web3j) throws Exception {
+        BigInteger configuredGasPrice = properties.getGasPriceWei();
+        if (configuredGasPrice != null && configuredGasPrice.signum() > 0) {
+            return configuredGasPrice;
+        }
+
+        EthGasPrice response = web3j.ethGasPrice().send();
+        if (response.hasError()) {
+            throw new BlockchainLedgerException(
+                    "Gas price request failed: " + response.getError().getMessage()
+            );
+        }
+
+        BigInteger networkGasPrice = response.getGasPrice();
+        if (networkGasPrice == null || networkGasPrice.signum() <= 0) {
+            throw new BlockchainLedgerException("Blockchain node returned an invalid gas price.");
+        }
+
+        return networkGasPrice;
     }
 
     private boolean hasValidSignerConfiguration() {
