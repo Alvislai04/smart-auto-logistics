@@ -82,6 +82,9 @@ CANCELLED
 - [x] System automatically varies vehicle speed
 - [x] Database-backed random telemetry profiles
 - [x] System-owned simulation sessions
+- [x] Route-relative simulation movement without accumulated coordinate drift
+- [x] Bounded temporary route-deviation profiles with automatic route recovery
+- [x] Route-aware simulation event limit for long-distance delivery completion
 - [x] Detect normal movement
 - [x] Detect delayed movement
 - [x] Detect idle vehicle

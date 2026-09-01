@@ -335,8 +335,10 @@ public class AdminMasterDataService {
     private double validateRouteDeviationOffset(Double offset) {
         double resolvedOffset = offset == null ? 0.0 : offset;
 
-        if (resolvedOffset < -5.0 || resolvedOffset > 5.0) {
-            throw new BadRequestException("Route deviation latitude offset must be between -5 and 5.");
+        if (resolvedOffset < -0.1 || resolvedOffset > 0.1) {
+            throw new BadRequestException(
+                    "Route deviation offset must be between -0.1 and 0.1 degrees."
+            );
         }
 
         return resolvedOffset;

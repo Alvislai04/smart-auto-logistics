@@ -726,14 +726,14 @@ function MasterDataPage() {
           </label>
 
           <label>
-            Route Offset
+            Route Deviation Offset (Degrees)
             <input
               type="number"
               name="routeDeviationLatitudeOffset"
               value={simulationProfileForm.routeDeviationLatitudeOffset}
               onChange={handleSimulationProfileChange}
-              min="-5"
-              max="5"
+              min="-0.1"
+              max="0.1"
               step="0.000001"
               required
             />

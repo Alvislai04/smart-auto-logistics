@@ -362,15 +362,22 @@ Manufacturer creates shipment with generated shipment code
 Manufacturer creates shipment with route coordinates
 -> Backend creates a system-owned simulation session
 -> Scheduler chooses random database-backed telemetry profile
--> Scheduler generates GPS, speed, and condition tracking events
+-> Scheduler advances GPS progress along the planned origin-to-destination route
+-> Route-deviation profiles apply one bounded, non-accumulating route offset
+-> Scheduler records speed and condition tracking events
 -> Map, tracking history, alerts, and simulation monitor update
 -> Session completes when destination or max event limit is reached
 ```
 
 The automatic scheduler creates at most one system-managed session for each
-shipment. A completed session is retained as history and is not recreated.
+shipment. Its safety event limit is expanded from route distance and weighted
+profile speeds when the configured default would stop the shipment before its
+destination. A completed session is retained as history and is not recreated.
 Alert-engine delay decisions are also retained until a later lifecycle action;
 normal telemetry does not repeatedly toggle the shipment back to `IN_TRANSIT`.
+Normal, delayed, and idle telemetry remains on the planned route. A configured
+route-deviation scenario temporarily moves the vehicle within the configured
+offset and the next non-deviation update returns it to the planned route.
 
 ### Account Management Workflow
 

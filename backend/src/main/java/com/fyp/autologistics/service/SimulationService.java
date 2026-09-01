@@ -40,6 +40,8 @@ public class SimulationService {
     private static final int MIN_MAX_EVENTS = 1;
     private static final int MAX_MAX_EVENTS = 10_000;
     private static final double ARRIVAL_THRESHOLD_KM = 0.25;
+    private static final double MAX_ROUTE_DEVIATION_OFFSET_DEGREES = 0.1;
+    private static final double ROUTE_COMPLETION_EVENT_BUFFER = 2.0;
     private static final List<ShipmentStatus> SYSTEM_SIMULATED_SHIPMENT_STATUSES = List.of(
             ShipmentStatus.CREATED,
             ShipmentStatus.READY_FOR_DISPATCH,
@@ -187,7 +189,7 @@ public class SimulationService {
         simulationSession.setNextRunAt(now);
         simulationSession.setLastRunAt(null);
         simulationSession.setGeneratedEvents(0);
-        simulationSession.setMaxEvents(defaultMaxEvents);
+        simulationSession.setMaxEvents(resolveRouteAwareMaxEvents(shipment, profiles));
         simulationSession.setCreatedBy(SYSTEM_ACTOR);
         simulationSession.setSystemManaged(true);
         simulationSession.setLastProfileKey(profile.getProfileKey());
@@ -208,6 +210,7 @@ public class SimulationService {
         }
 
         Shipment shipment = session.getShipment();
+        ensureRouteAwareMaxEvents(session, shipment, profiles);
         markShipmentAsInTransitIfRequired(shipment);
 
         SimulationProfile profile = selectProfile(profiles);
@@ -390,20 +393,32 @@ public class SimulationService {
             SimulationProfile profile,
             double speed
     ) {
+        double originLatitude = shipment.getOriginLatitude();
+        double originLongitude = shipment.getOriginLongitude();
         double currentLatitude = session.getCurrentLatitude();
         double currentLongitude = session.getCurrentLongitude();
         double destinationLatitude = shipment.getDestinationLatitude();
         double destinationLongitude = shipment.getDestinationLongitude();
-        double distanceRemainingKm = GeoDistanceUtils.haversineDistanceKm(
-                currentLatitude,
-                currentLongitude,
+
+        double routeDistanceKm = GeoDistanceUtils.haversineDistanceKm(
+                originLatitude,
+                originLongitude,
                 destinationLatitude,
                 destinationLongitude
         );
 
-        if (distanceRemainingKm <= ARRIVAL_THRESHOLD_KM) {
+        if (routeDistanceKm <= ARRIVAL_THRESHOLD_KM) {
             return new double[] { destinationLatitude, destinationLongitude };
         }
+
+        double currentProgress = GeoDistanceUtils.progressRatioOnSegment(
+                currentLatitude,
+                currentLongitude,
+                originLatitude,
+                originLongitude,
+                destinationLatitude,
+                destinationLongitude
+        );
 
         double travelDistanceKm = resolveTravelDistanceKm(
                 speed,
@@ -411,21 +426,65 @@ public class SimulationService {
                 profile.getConditionStatus()
         );
 
-        if (travelDistanceKm <= 0.0) {
-            return new double[] { currentLatitude, currentLongitude };
+        double nextProgress = Math.min(
+                1.0,
+                currentProgress + (travelDistanceKm / routeDistanceKm)
+        );
+        double routeLatitude = interpolate(originLatitude, destinationLatitude, nextProgress);
+        double routeLongitude = interpolate(originLongitude, destinationLongitude, nextProgress);
+
+        if (nextProgress >= 1.0) {
+            return new double[] { destinationLatitude, destinationLongitude };
         }
 
-        double progressRatio = Math.min(1.0, travelDistanceKm / distanceRemainingKm);
-        double nextLatitude =
-                currentLatitude + ((destinationLatitude - currentLatitude) * progressRatio);
-        double nextLongitude =
-                currentLongitude + ((destinationLongitude - currentLongitude) * progressRatio);
+        return applyBoundedRouteDeviation(
+                routeLatitude,
+                routeLongitude,
+                shipment,
+                profile
+        );
+    }
 
-        if (Boolean.TRUE.equals(profile.getRouteDeviationEnabled())) {
-            nextLatitude += resolveSpeed(profile.getRouteDeviationLatitudeOffset(), 0.0);
+    private double[] applyBoundedRouteDeviation(
+            double routeLatitude,
+            double routeLongitude,
+            Shipment shipment,
+            SimulationProfile profile
+    ) {
+        double deviationOffset = Math.max(
+                -MAX_ROUTE_DEVIATION_OFFSET_DEGREES,
+                Math.min(
+                        MAX_ROUTE_DEVIATION_OFFSET_DEGREES,
+                        resolveSpeed(profile.getRouteDeviationLatitudeOffset(), 0.0)
+                )
+        );
+
+        if (!Boolean.TRUE.equals(profile.getRouteDeviationEnabled())
+                || deviationOffset == 0.0) {
+            return new double[] { routeLatitude, routeLongitude };
         }
 
-        return new double[] { nextLatitude, nextLongitude };
+        double routeLatitudeDelta =
+                shipment.getDestinationLatitude() - shipment.getOriginLatitude();
+        double routeLongitudeDelta =
+                shipment.getDestinationLongitude() - shipment.getOriginLongitude();
+        double routeLengthDegrees = Math.hypot(routeLatitudeDelta, routeLongitudeDelta);
+
+        if (routeLengthDegrees == 0.0) {
+            return new double[] { routeLatitude, routeLongitude };
+        }
+
+        double perpendicularLatitude = -routeLongitudeDelta / routeLengthDegrees;
+        double perpendicularLongitude = routeLatitudeDelta / routeLengthDegrees;
+
+        return new double[] {
+                routeLatitude + (perpendicularLatitude * deviationOffset),
+                routeLongitude + (perpendicularLongitude * deviationOffset)
+        };
+    }
+
+    private double interpolate(double start, double end, double progress) {
+        return start + ((end - start) * progress);
     }
 
     private double resolveTravelDistanceKm(
@@ -438,6 +497,60 @@ public class SimulationService {
         }
 
         return speed * intervalSeconds / 3600.0;
+    }
+
+    private void ensureRouteAwareMaxEvents(
+            SimulationSession session,
+            Shipment shipment,
+            List<SimulationProfile> profiles
+    ) {
+        int requiredMaxEvents = resolveRouteAwareMaxEvents(shipment, profiles);
+
+        if (session.getMaxEvents() == null || session.getMaxEvents() < requiredMaxEvents) {
+            session.setMaxEvents(requiredMaxEvents);
+        }
+    }
+
+    private int resolveRouteAwareMaxEvents(
+            Shipment shipment,
+            List<SimulationProfile> profiles
+    ) {
+        double weightedAverageSpeed = calculateWeightedAverageSpeed(profiles);
+
+        if (weightedAverageSpeed <= 0.0) {
+            return defaultMaxEvents;
+        }
+
+        double routeDistanceKm = GeoDistanceUtils.haversineDistanceKm(
+                shipment.getOriginLatitude(),
+                shipment.getOriginLongitude(),
+                shipment.getDestinationLatitude(),
+                shipment.getDestinationLongitude()
+        );
+        double distancePerEventKm =
+                weightedAverageSpeed * defaultIntervalSeconds / 3600.0;
+        long routeAwareEvents = (long) Math.ceil(
+                routeDistanceKm / distancePerEventKm * ROUTE_COMPLETION_EVENT_BUFFER
+        );
+        long requiredEvents = Math.max(defaultMaxEvents, routeAwareEvents);
+
+        return (int) Math.min(requiredEvents, MAX_MAX_EVENTS);
+    }
+
+    private double calculateWeightedAverageSpeed(List<SimulationProfile> profiles) {
+        double weightedSpeedTotal = 0.0;
+        int totalWeight = 0;
+
+        for (SimulationProfile profile : profiles) {
+            int weight = resolveWeight(profile);
+            double minSpeed = Math.max(0.0, resolveSpeed(profile.getMinSpeed(), 0.0));
+            double maxSpeed = Math.max(minSpeed, resolveSpeed(profile.getMaxSpeed(), minSpeed));
+
+            weightedSpeedTotal += ((minSpeed + maxSpeed) / 2.0) * weight;
+            totalWeight += weight;
+        }
+
+        return totalWeight == 0 ? 0.0 : weightedSpeedTotal / totalWeight;
     }
 
     private boolean hasReachedDestination(SimulationSession session, Shipment shipment) {

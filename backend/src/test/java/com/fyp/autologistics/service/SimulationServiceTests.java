@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -119,6 +120,78 @@ class SimulationServiceTests {
         verify(simulationSessionRepository).save(activeSession);
     }
 
+    @Test
+    void repeatedRouteDeviationDoesNotAccumulateOutsidePlannedRoute() {
+        Shipment shipment = buildMalaysiaRouteShipment();
+        SimulationSession session = buildSession(shipment, SimulationSessionStatus.ACTIVE);
+        session.setCurrentLatitude(shipment.getOriginLatitude());
+        session.setCurrentLongitude(shipment.getOriginLongitude());
+        SimulationProfile routeDeviationProfile = buildRouteDeviationProfile();
+
+        double[] firstPosition = calculateNextPosition(
+                session,
+                shipment,
+                routeDeviationProfile,
+                45.0
+        );
+        session.setCurrentLatitude(firstPosition[0]);
+        session.setCurrentLongitude(firstPosition[1]);
+
+        double[] secondPosition = calculateNextPosition(
+                session,
+                shipment,
+                routeDeviationProfile,
+                45.0
+        );
+
+        double firstDistanceFromRoute = routeDistanceKm(firstPosition, shipment);
+        double secondDistanceFromRoute = routeDistanceKm(secondPosition, shipment);
+
+        assertThat(firstDistanceFromRoute).isBetween(8.0, 10.0);
+        assertThat(secondDistanceFromRoute).isBetween(8.0, 10.0);
+        assertThat(Math.abs(secondDistanceFromRoute - firstDistanceFromRoute)).isLessThan(0.1);
+    }
+
+    @Test
+    void normalProfileRecoversCorruptedPositionToPlannedRoute() {
+        Shipment shipment = buildMalaysiaRouteShipment();
+        SimulationSession session = buildSession(shipment, SimulationSessionStatus.ACTIVE);
+        session.setCurrentLatitude(52.3809632346142);
+        session.setCurrentLongitude(101.768591153875);
+
+        double[] recoveredPosition = calculateNextPosition(
+                session,
+                shipment,
+                buildNormalProfile(),
+                60.0
+        );
+
+        assertThat(routeDistanceKm(recoveredPosition, shipment)).isLessThan(0.01);
+        assertThat(recoveredPosition[0]).isBetween(
+                shipment.getDestinationLatitude(),
+                shipment.getOriginLatitude()
+        );
+        assertThat(recoveredPosition[1]).isBetween(
+                shipment.getDestinationLongitude(),
+                shipment.getOriginLongitude()
+        );
+    }
+
+    @Test
+    void routeAwareMaxEventsAllowsLongRouteToReachDestination() {
+        Shipment shipment = buildMalaysiaRouteShipment();
+
+        Integer maxEvents = ReflectionTestUtils.invokeMethod(
+                simulationService,
+                "resolveRouteAwareMaxEvents",
+                shipment,
+                List.of(buildNormalProfile())
+        );
+
+        assertThat(maxEvents).isGreaterThan(500);
+        assertThat(maxEvents).isLessThanOrEqualTo(10_000);
+    }
+
     private Shipment buildShipment(ShipmentStatus status) {
         Shipment shipment = new Shipment();
         ReflectionTestUtils.setField(shipment, "id", SHIPMENT_ID);
@@ -128,6 +201,15 @@ class SimulationServiceTests {
         shipment.setOriginLongitude(0.0);
         shipment.setDestinationLatitude(10.0);
         shipment.setDestinationLongitude(10.0);
+        return shipment;
+    }
+
+    private Shipment buildMalaysiaRouteShipment() {
+        Shipment shipment = buildShipment(ShipmentStatus.IN_TRANSIT);
+        shipment.setOriginLatitude(3.511300);
+        shipment.setOriginLongitude(103.397400);
+        shipment.setDestinationLatitude(3.139000);
+        shipment.setDestinationLongitude(101.686900);
         return shipment;
     }
 
@@ -162,5 +244,47 @@ class SimulationServiceTests {
         profile.setActive(true);
         profile.setSortOrder(1);
         return profile;
+    }
+
+    private SimulationProfile buildRouteDeviationProfile() {
+        SimulationProfile profile = new SimulationProfile();
+        profile.setProfileKey("TEST_ROUTE_DEVIATION");
+        profile.setDisplayName("Test route deviation");
+        profile.setConditionStatus(ConditionStatus.ROUTE_DEVIATION);
+        profile.setMinSpeed(45.0);
+        profile.setMaxSpeed(45.0);
+        profile.setWeight(1);
+        profile.setRouteDeviationEnabled(true);
+        profile.setRouteDeviationLatitudeOffset(0.08);
+        profile.setActive(true);
+        profile.setSortOrder(1);
+        return profile;
+    }
+
+    private double[] calculateNextPosition(
+            SimulationSession session,
+            Shipment shipment,
+            SimulationProfile profile,
+            double speed
+    ) {
+        return ReflectionTestUtils.invokeMethod(
+                simulationService,
+                "calculateNextPosition",
+                session,
+                shipment,
+                profile,
+                speed
+        );
+    }
+
+    private double routeDistanceKm(double[] position, Shipment shipment) {
+        return com.fyp.autologistics.util.GeoDistanceUtils.distanceFromPointToSegmentKm(
+                position[0],
+                position[1],
+                shipment.getOriginLatitude(),
+                shipment.getOriginLongitude(),
+                shipment.getDestinationLatitude(),
+                shipment.getDestinationLongitude()
+        );
     }
 }
