@@ -25,4 +25,9 @@ public interface SimulationSessionRepository extends JpaRepository<SimulationSes
 
     @EntityGraph(attributePaths = "shipment")
     Optional<SimulationSession> findFirstByShipmentIdOrderByUpdatedAtDesc(Long shipmentId);
+
+    Optional<SimulationSession> findFirstByShipmentIdAndStatusOrderByUpdatedAtDesc(
+            Long shipmentId,
+            SimulationSessionStatus status
+    );
 }

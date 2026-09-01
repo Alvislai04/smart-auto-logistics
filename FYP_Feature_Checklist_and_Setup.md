@@ -54,6 +54,9 @@ Legend:
 - [x] Prevent logistics/admin status actions from bypassing dealership receipt confirmation
 - [x] Restrict receipt confirmation to the dealership assigned by `dealership_key`
 - [x] Set `DELIVERED` only after assigned dealership receipt confirmation
+- [x] Restrict transit start to the shipment's assigned manufacturer
+- [x] Restrict logistics workflow actions to `ARRIVED` and `CANCELLED`
+- [x] Keep IoT simulation idle until the manufacturer starts transit
 - [x] Prevent updates after `DELIVERED`
 - [x] Prevent updates after `CANCELLED`
 
@@ -93,6 +96,9 @@ CANCELLED
 - [x] Detect idle vehicle
 - [x] Update shipment status to `DELAYED` when delayed/idle condition is detected
 - [x] Update shipment status back to `IN_TRANSIT` when movement becomes normal
+- [x] Stop active simulation immediately after arrival, delivery, or cancellation
+- [x] Restrict delay monitoring to `IN_TRANSIT` and `DELAYED` shipments
+- [x] Prevent historical telemetry from reverting `ARRIVED` to `DELAYED`
 
 Current condition statuses:
 
@@ -356,12 +362,12 @@ frontend/src/
 Current workflow buttons:
 
 ```text
-Mark Ready
-Mark Picked Up
-Mark In Transit
-Mark Arrived
+Mark Ready (assigned manufacturer)
+Mark Picked Up (assigned manufacturer)
+Start Transit (assigned manufacturer; starts IoT movement)
+Mark Arrived (logistics provider)
 Confirm Receipt (assigned dealership; completes delivery)
-Cancel
+Cancel (admin, assigned manufacturer, or logistics provider)
 ```
 
 ---
@@ -480,15 +486,15 @@ LOGISTICS_PROVIDER
 DEALERSHIP
 ```
 
-Suggested access:
+Implemented access:
 
 | Feature                    | Admin | Manufacturer | Logistics Provider | Dealership |
 | -------------------------- | ----: | -----------: | -----------------: | ---------: |
 | Dashboard                  |   Yes |          Yes |                Yes |        Yes |
-| Create Shipment            |   Yes |          Yes |                 No |         No |
-| Update Shipment Status     |   Yes |      Limited |                Yes |    Limited |
+| Create Shipment            |    No |          Yes |                 No |         No |
+| Update Shipment Status     | Cancel | Own pre-transit/start | Arrive/cancel | Receipt only |
 | Confirm Delivery Receipt   |    No |           No |                 No | Assigned only |
-| Simulate / Tracking Update |   Yes |           No |                Yes |         No |
+| Simulate / Tracking Update | Monitor |      System only |            Monitor |         No |
 | View Alerts                |   Yes |          Yes |                Yes |        Yes |
 | Resolve Alerts             |   Yes |      Limited |                Yes |         No |
 | Blockchain Monitor         |   Yes |           No |                 No |         No |
@@ -847,17 +853,19 @@ PUT /api/admin/notifications/{notificationId}/read
 ```text
 Create Shipment
 ↓
-Mark Ready
+Mark Ready (assigned manufacturer, optional)
 ↓
-Mark Picked Up
+Mark Picked Up (assigned manufacturer, optional)
 ↓
-Mark In Transit
+Start Transit (assigned manufacturer)
 ↓
-Simulate tracking updates
+System simulates tracking updates
 ↓
-Mark Arrived
+Mark Arrived (logistics provider)
 ↓
-Mark Delivered
+Confirm Receipt (assigned dealership)
+↓
+Shipment becomes Delivered
 ```
 
 ### 12.2 Delay detection flow

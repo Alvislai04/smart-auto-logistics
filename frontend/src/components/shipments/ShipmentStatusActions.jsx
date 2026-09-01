@@ -3,21 +3,25 @@ const STATUS_ACTIONS = [
     label: "Mark Ready",
     status: "READY_FOR_DISPATCH",
     allowedFrom: ["CREATED"],
+    allowedRoles: ["MANUFACTURER"],
   },
   {
     label: "Mark Picked Up",
     status: "PICKED_UP",
     allowedFrom: ["READY_FOR_DISPATCH"],
+    allowedRoles: ["MANUFACTURER"],
   },
   {
-    label: "Mark In Transit",
+    label: "Start Transit",
     status: "IN_TRANSIT",
-    allowedFrom: ["PICKED_UP", "DELAYED"],
+    allowedFrom: ["CREATED", "READY_FOR_DISPATCH", "PICKED_UP", "DELAYED"],
+    allowedRoles: ["MANUFACTURER"],
   },
   {
     label: "Mark Arrived",
     status: "ARRIVED",
     allowedFrom: ["IN_TRANSIT", "DELAYED"],
+    allowedRoles: ["LOGISTICS_PROVIDER"],
   },
   {
     label: "Cancel",
@@ -30,13 +34,21 @@ const STATUS_ACTIONS = [
       "DELAYED",
       "ARRIVED",
     ],
+    allowedRoles: ["ADMIN", "MANUFACTURER", "LOGISTICS_PROVIDER"],
     danger: true,
   },
 ];
 
-function ShipmentStatusActions({ currentStatus, isUpdating, onUpdateStatus }) {
-  const availableActions = STATUS_ACTIONS.filter((action) =>
-    action.allowedFrom.includes(currentStatus),
+function ShipmentStatusActions({
+  currentStatus,
+  currentUserRole,
+  isUpdating,
+  onUpdateStatus,
+}) {
+  const availableActions = STATUS_ACTIONS.filter(
+    (action) =>
+      action.allowedFrom.includes(currentStatus) &&
+      action.allowedRoles.includes(currentUserRole),
   );
 
   if (availableActions.length === 0) {

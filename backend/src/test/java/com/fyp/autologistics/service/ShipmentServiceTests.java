@@ -86,9 +86,15 @@ class ShipmentServiceTests {
     @Test
     void validManualTransitionCreatesAttributedHistoryAndPublishesAfterChange() {
         Shipment shipment = buildShipment(ShipmentStatus.CREATED, LogisticsStage.STOCK_YARD);
-        AppUser actor = buildActor();
+        shipment.setManufacturerKey("MFG-001");
+        AppUser actor = buildActor(
+                "Manufacturer Operator",
+                "manufacturer@example.com",
+                UserRole.MANUFACTURER,
+                "MFG-001"
+        );
         when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
-        when(authenticatedUserService.getAuthenticatedUser("admin@example.com"))
+        when(authenticatedUserService.getAuthenticatedUser("manufacturer@example.com"))
                 .thenReturn(actor);
         when(shipmentRepository.save(shipment)).thenReturn(shipment);
         when(shipmentEventRepository.save(any(ShipmentEvent.class)))
@@ -97,7 +103,7 @@ class ShipmentServiceTests {
         ShipmentResponse response = shipmentService.updateShipmentStatus(
                 42L,
                 ShipmentStatus.READY_FOR_DISPATCH,
-                "admin@example.com"
+                "manufacturer@example.com"
         );
 
         assertThat(response.getStatus()).isEqualTo(ShipmentStatus.READY_FOR_DISPATCH);
@@ -107,8 +113,8 @@ class ShipmentServiceTests {
         verify(shipmentEventRepository).save(historyCaptor.capture());
         ShipmentEvent history = historyCaptor.getValue();
         assertThat(history.getEventType()).isEqualTo(ShipmentEventType.STATUS_CHANGED);
-        assertThat(history.getActorEmail()).isEqualTo("admin@example.com");
-        assertThat(history.getActorRole()).isEqualTo(UserRole.ADMIN);
+        assertThat(history.getActorEmail()).isEqualTo("manufacturer@example.com");
+        assertThat(history.getActorRole()).isEqualTo(UserRole.MANUFACTURER);
         assertThat(history.getSourceType()).isEqualTo(ShipmentEventSourceType.USER_ACTION);
         verify(blockchainRecordService).recordShipmentEventAutomatically(history);
 
@@ -167,6 +173,88 @@ class ShipmentServiceTests {
                 .hasMessageContaining("assigned dealership confirms receipt");
 
         assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.ARRIVED);
+        verify(shipmentRepository, never()).save(any(Shipment.class));
+    }
+
+    @Test
+    void assignedManufacturerCanStartTransitDirectlyFromCreated() {
+        Shipment shipment = buildShipment(ShipmentStatus.CREATED, LogisticsStage.STOCK_YARD);
+        shipment.setManufacturerKey("MFG-001");
+        AppUser manufacturer = buildActor(
+                "Manufacturer Operator",
+                "manufacturer@example.com",
+                UserRole.MANUFACTURER,
+                "MFG-001"
+        );
+
+        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(authenticatedUserService.getAuthenticatedUser("manufacturer@example.com"))
+                .thenReturn(manufacturer);
+        when(shipmentRepository.save(shipment)).thenReturn(shipment);
+        when(shipmentEventRepository.save(any(ShipmentEvent.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ShipmentResponse response = shipmentService.updateShipmentStatus(
+                42L,
+                ShipmentStatus.IN_TRANSIT,
+                "manufacturer@example.com"
+        );
+
+        assertThat(response.getStatus()).isEqualTo(ShipmentStatus.IN_TRANSIT);
+        assertThat(response.getCurrentStage()).isEqualTo(LogisticsStage.IN_TRANSIT);
+        verify(applicationEventPublisher).publishEvent(new ShipmentStatusChangedEvent(
+                42L,
+                ShipmentStatus.CREATED,
+                ShipmentStatus.IN_TRANSIT,
+                ShipmentEventSourceType.USER_ACTION
+        ));
+    }
+
+    @Test
+    void logisticsProviderCannotStartTransit() {
+        Shipment shipment = buildShipment(ShipmentStatus.PICKED_UP, LogisticsStage.STOCK_YARD);
+        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(authenticatedUserService.getAuthenticatedUser("logistics@example.com"))
+                .thenReturn(buildActor(
+                        "Logistics Operator",
+                        "logistics@example.com",
+                        UserRole.LOGISTICS_PROVIDER,
+                        null
+                ));
+
+        assertThatThrownBy(() -> shipmentService.updateShipmentStatus(
+                42L,
+                ShipmentStatus.IN_TRANSIT,
+                "logistics@example.com"
+        ))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("only mark shipments arrived or cancel");
+
+        assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.PICKED_UP);
+        verify(shipmentRepository, never()).save(any(Shipment.class));
+    }
+
+    @Test
+    void manufacturerCannotStartAnotherCompanyShipment() {
+        Shipment shipment = buildShipment(ShipmentStatus.CREATED, LogisticsStage.STOCK_YARD);
+        shipment.setManufacturerKey("MFG-001");
+        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(authenticatedUserService.getAuthenticatedUser("other-mfg@example.com"))
+                .thenReturn(buildActor(
+                        "Other Manufacturer",
+                        "other-mfg@example.com",
+                        UserRole.MANUFACTURER,
+                        "MFG-002"
+                ));
+
+        assertThatThrownBy(() -> shipmentService.updateShipmentStatus(
+                42L,
+                ShipmentStatus.IN_TRANSIT,
+                "other-mfg@example.com"
+        ))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("own company profile");
+
         verify(shipmentRepository, never()).save(any(Shipment.class));
     }
 

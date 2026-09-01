@@ -83,7 +83,6 @@ class ShipmentLifecycleIntegrationTests {
         createReferenceDataAndUsers();
 
         String manufacturerToken = login(MANUFACTURER_EMAIL);
-        String adminToken = login(ADMIN_EMAIL);
         String logisticsToken = login(LOGISTICS_EMAIL);
         String dealershipToken = login(DEALERSHIP_EMAIL);
         String estimatedArrival = LocalDateTime.now(applicationClock)
@@ -136,13 +135,22 @@ class ShipmentLifecycleIntegrationTests {
 
         mockMvc.perform(put("/api/shipments/{shipmentId}/status", shipmentId)
                         .queryParam("status", "READY_FOR_DISPATCH")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(adminToken)))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(manufacturerToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("READY_FOR_DISPATCH"))
                 .andExpect(jsonPath("$.currentStage").value("READY_FOR_DISPATCH"));
 
-        updateStatusAsLogistics(shipmentId, logisticsToken, "PICKED_UP");
-        updateStatusAsLogistics(shipmentId, logisticsToken, "IN_TRANSIT");
+        updateStatus(shipmentId, manufacturerToken, "PICKED_UP");
+
+        mockMvc.perform(put("/api/shipments/{shipmentId}/status", shipmentId)
+                        .queryParam("status", "IN_TRANSIT")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(logisticsToken)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "Logistics providers can only mark shipments arrived or cancel them."
+                ));
+
+        updateStatus(shipmentId, manufacturerToken, "IN_TRANSIT");
         updateStatusAsLogistics(shipmentId, logisticsToken, "ARRIVED");
 
         mockMvc.perform(put("/api/shipments/{shipmentId}/status", shipmentId)
@@ -190,7 +198,7 @@ class ShipmentLifecycleIntegrationTests {
                         && "READY_FOR_DISPATCH".equals(event.getNewStatus()))
                 .singleElement()
                 .satisfies(event -> {
-                    assertThat(event.getActorEmail()).isEqualTo(ADMIN_EMAIL);
+                    assertThat(event.getActorEmail()).isEqualTo(MANUFACTURER_EMAIL);
                     assertThat(event.getSourceType())
                             .isEqualTo(ShipmentEventSourceType.USER_ACTION);
                 });
@@ -279,6 +287,18 @@ class ShipmentLifecycleIntegrationTests {
         mockMvc.perform(put("/api/shipments/{shipmentId}/status", shipmentId)
                         .queryParam("status", nextStatus)
                         .header(HttpHeaders.AUTHORIZATION, bearer(logisticsToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(nextStatus));
+    }
+
+    private void updateStatus(
+            long shipmentId,
+            String token,
+            String nextStatus
+    ) throws Exception {
+        mockMvc.perform(put("/api/shipments/{shipmentId}/status", shipmentId)
+                        .queryParam("status", nextStatus)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value(nextStatus));
     }

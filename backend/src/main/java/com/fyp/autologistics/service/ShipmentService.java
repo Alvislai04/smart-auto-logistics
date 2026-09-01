@@ -336,12 +336,12 @@ public class ShipmentService {
         AppUser actor = authenticatedUserService.getAuthenticatedUser(actorEmail);
         ShipmentStatus previousStatus = shipment.getStatus();
 
-        validateStatusTransition(previousStatus, status);
-        validateManualStatusUpdateAllowed(status);
-
         if (previousStatus == status) {
             return mapToResponse(shipment);
         }
+
+        validateStatusTransition(previousStatus, status);
+        validateManualStatusUpdateAllowed(shipment, actor, status);
 
         shipment.setStatus(status);
         shipment.setCurrentStage(resolveStageForStatus(status, shipment.getCurrentStage()));
@@ -494,9 +494,11 @@ public class ShipmentService {
 
         boolean isValidTransition = switch (currentStatus) {
             case CREATED -> nextStatus == ShipmentStatus.READY_FOR_DISPATCH
+                    || nextStatus == ShipmentStatus.IN_TRANSIT
                     || nextStatus == ShipmentStatus.CANCELLED;
 
             case READY_FOR_DISPATCH -> nextStatus == ShipmentStatus.PICKED_UP
+                    || nextStatus == ShipmentStatus.IN_TRANSIT
                     || nextStatus == ShipmentStatus.CANCELLED;
 
             case PICKED_UP -> nextStatus == ShipmentStatus.IN_TRANSIT
@@ -526,12 +528,59 @@ public class ShipmentService {
         }
     }
 
-    private void validateManualStatusUpdateAllowed(ShipmentStatus nextStatus) {
+    private void validateManualStatusUpdateAllowed(
+            Shipment shipment,
+            AppUser actor,
+            ShipmentStatus nextStatus
+    ) {
         if (nextStatus == ShipmentStatus.DELIVERED) {
             throw new BadRequestException(
                     "A shipment becomes delivered only when its assigned dealership confirms receipt."
             );
         }
+
+        boolean actionAllowed = switch (actor.getRole()) {
+            case MANUFACTURER -> {
+                validateManufacturerStatusOwnership(shipment, actor);
+                yield nextStatus == ShipmentStatus.READY_FOR_DISPATCH
+                        || nextStatus == ShipmentStatus.PICKED_UP
+                        || nextStatus == ShipmentStatus.IN_TRANSIT
+                        || nextStatus == ShipmentStatus.CANCELLED;
+            }
+            case LOGISTICS_PROVIDER -> nextStatus == ShipmentStatus.ARRIVED
+                    || nextStatus == ShipmentStatus.CANCELLED;
+            case ADMIN -> nextStatus == ShipmentStatus.CANCELLED;
+            case DEALERSHIP -> false;
+        };
+
+        if (!actionAllowed) {
+            throw new BadRequestException(resolveStatusPermissionMessage(actor.getRole()));
+        }
+    }
+
+    private void validateManufacturerStatusOwnership(Shipment shipment, AppUser actor) {
+        String actorPartyKey = normalizeText(actor.getPartyProfileKey());
+
+        if (actorPartyKey == null) {
+            throw new BadRequestException(
+                    "Your manufacturer account is not linked to a shipment party profile."
+            );
+        }
+
+        if (!actorPartyKey.equals(normalizeText(shipment.getManufacturerKey()))) {
+            throw new BadRequestException(
+                    "Manufacturers can only update shipments linked to their own company profile."
+            );
+        }
+    }
+
+    private String resolveStatusPermissionMessage(UserRole role) {
+        return switch (role) {
+            case MANUFACTURER -> "Manufacturers can manage pre-transit milestones and start transit.";
+            case LOGISTICS_PROVIDER -> "Logistics providers can only mark shipments arrived or cancel them.";
+            case ADMIN -> "Administrators can only cancel shipments from the workflow actions.";
+            case DEALERSHIP -> "Dealerships complete delivery by confirming receipt.";
+        };
     }
 
     private void validateReceiptConfirmationAllowed(Shipment shipment, AppUser actor) {

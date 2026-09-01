@@ -6,6 +6,7 @@ import com.fyp.autologistics.entity.AppUser;
 import com.fyp.autologistics.entity.Shipment;
 import com.fyp.autologistics.entity.ShipmentPartyProfile;
 import com.fyp.autologistics.entity.StockAlertRule;
+import com.fyp.autologistics.entity.TrackingEvent;
 import com.fyp.autologistics.entity.VehicleModel;
 import com.fyp.autologistics.enums.AlertSeverity;
 import com.fyp.autologistics.enums.AlertStatus;
@@ -199,6 +200,28 @@ class AlertServiceTests {
         assertThat(response.getAlertType()).isEqualTo(AlertType.ORDER_UPDATE);
         assertThat(response.getMessage()).contains("Ready For Dispatch");
         verify(alertRepository).saveAll(List.of(previousAlert));
+    }
+
+    @Test
+    void arrivedShipmentIsNotChangedBackToDelayedByAlertEvaluation() {
+        Shipment shipment = new Shipment();
+        shipment.setStatus(ShipmentStatus.ARRIVED);
+
+        TrackingEvent delayedTrackingEvent = new TrackingEvent();
+        delayedTrackingEvent.setConditionStatus(
+                com.fyp.autologistics.enums.ConditionStatus.DELAYED
+        );
+        delayedTrackingEvent.setSpeed(5.0);
+
+        alertService.evaluateShipmentMonitoringRules(shipment, delayedTrackingEvent);
+
+        verify(shipmentService, never()).updateSystemStatus(
+                any(),
+                any(),
+                any(),
+                any(),
+                any()
+        );
     }
 
     private AppUser buildUser(UserRole role, String partyProfileKey) {

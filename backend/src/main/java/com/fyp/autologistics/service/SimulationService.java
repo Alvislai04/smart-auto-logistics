@@ -12,7 +12,7 @@ import com.fyp.autologistics.enums.LogisticsStage;
 import com.fyp.autologistics.enums.ShipmentEventSourceType;
 import com.fyp.autologistics.enums.ShipmentStatus;
 import com.fyp.autologistics.enums.SimulationSessionStatus;
-import com.fyp.autologistics.event.ShipmentCreatedEvent;
+import com.fyp.autologistics.event.ShipmentStatusChangedEvent;
 import com.fyp.autologistics.repository.ShipmentRepository;
 import com.fyp.autologistics.repository.SimulationProfileRepository;
 import com.fyp.autologistics.repository.SimulationSessionRepository;
@@ -43,9 +43,6 @@ public class SimulationService {
     private static final double MAX_ROUTE_DEVIATION_OFFSET_DEGREES = 0.1;
     private static final double ROUTE_COMPLETION_EVENT_BUFFER = 2.0;
     private static final List<ShipmentStatus> SYSTEM_SIMULATED_SHIPMENT_STATUSES = List.of(
-            ShipmentStatus.CREATED,
-            ShipmentStatus.READY_FOR_DISPATCH,
-            ShipmentStatus.PICKED_UP,
             ShipmentStatus.IN_TRANSIT,
             ShipmentStatus.DELAYED
     );
@@ -108,8 +105,8 @@ public class SimulationService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void createSessionAfterShipmentCreated(ShipmentCreatedEvent event) {
-        if (!schedulerEnabled) {
+    public void createSessionAfterTransitStarted(ShipmentStatusChangedEvent event) {
+        if (!schedulerEnabled || event.currentStatus() != ShipmentStatus.IN_TRANSIT) {
             return;
         }
 
@@ -117,6 +114,21 @@ public class SimulationService {
         List<SimulationProfile> profiles = loadActiveProfiles();
 
         createSystemSessionIfMissing(shipment, LocalDateTime.now(), profiles);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void completeSessionAfterTransitEnded(ShipmentStatusChangedEvent event) {
+        if (!isSimulationTerminalStatus(event.currentStatus())) {
+            return;
+        }
+
+        simulationSessionRepository
+                .findFirstByShipmentIdAndStatusOrderByUpdatedAtDesc(
+                        event.shipmentId(),
+                        SimulationSessionStatus.ACTIVE
+                )
+                .ifPresent(session -> completeSession(session, LocalDateTime.now()));
     }
 
     @Scheduled(fixedDelayString = "${app.simulation.scheduler-delay-ms:5000}")
@@ -170,7 +182,10 @@ public class SimulationService {
                         shipment.getId()
                 );
 
-        if (existingSession.isPresent()) {
+        if (existingSession
+                .map(SimulationSession::getStatus)
+                .filter(SimulationSessionStatus.ACTIVE::equals)
+                .isPresent()) {
             return Optional.empty();
         }
 
@@ -211,7 +226,6 @@ public class SimulationService {
 
         Shipment shipment = session.getShipment();
         ensureRouteAwareMaxEvents(session, shipment, profiles);
-        markShipmentAsInTransitIfRequired(shipment);
 
         SimulationProfile profile = selectProfile(profiles);
         ConditionStatus conditionStatus = profile.getConditionStatus();
@@ -259,25 +273,17 @@ public class SimulationService {
                 && hasRouteCoordinates(shipment);
     }
 
+    private boolean isSimulationTerminalStatus(ShipmentStatus status) {
+        return status == ShipmentStatus.ARRIVED
+                || status == ShipmentStatus.DELIVERED
+                || status == ShipmentStatus.CANCELLED;
+    }
+
     private boolean hasRouteCoordinates(Shipment shipment) {
         return shipment.getOriginLatitude() != null
                 && shipment.getOriginLongitude() != null
                 && shipment.getDestinationLatitude() != null
                 && shipment.getDestinationLongitude() != null;
-    }
-
-    private void markShipmentAsInTransitIfRequired(Shipment shipment) {
-        if (shipment.getStatus() == ShipmentStatus.CREATED
-                || shipment.getStatus() == ShipmentStatus.READY_FOR_DISPATCH
-                || shipment.getStatus() == ShipmentStatus.PICKED_UP) {
-            shipmentService.updateSystemStatus(
-                    shipment,
-                    ShipmentStatus.IN_TRANSIT,
-                    LogisticsStage.IN_TRANSIT,
-                    ShipmentEventSourceType.IOT_SIMULATION,
-                    "System simulation started in-transit tracking."
-            );
-        }
     }
 
     private void updateShipmentStatusBasedOnCondition(

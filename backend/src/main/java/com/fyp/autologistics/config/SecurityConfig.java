@@ -49,7 +49,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/blockchain-records/**").hasRole("ADMIN")
 
                         .requestMatchers(HttpMethod.POST, "/api/shipments").hasRole("MANUFACTURER")
-                        .requestMatchers(HttpMethod.PUT, "/api/shipments/*/status").hasAnyRole("ADMIN", "LOGISTICS_PROVIDER")
+                        .requestMatchers(HttpMethod.PUT, "/api/shipments/*/status").hasAnyRole("ADMIN", "MANUFACTURER", "LOGISTICS_PROVIDER")
                         .requestMatchers(HttpMethod.PUT, "/api/shipments/*/receipt-confirmation").hasRole("DEALERSHIP")
                         .requestMatchers(HttpMethod.PUT, "/api/shipments/*").hasAnyRole("ADMIN", "MANUFACTURER")
                         .requestMatchers(HttpMethod.DELETE, "/api/shipments/**").hasRole("ADMIN")

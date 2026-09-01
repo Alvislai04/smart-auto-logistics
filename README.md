@@ -37,8 +37,8 @@ The project currently includes:
   `party_profile_key`
 - Admin-managed database records for shipment dropdowns and simulation behavior
 - Supabase PostgreSQL Session Pooler configuration
-- Manufacturer shipment creation, listing, details, deletion, and workflow
-  status updates
+- Manufacturer shipment creation, listing, details, pre-pickup editing,
+  pre-transit milestones, and explicit transit start
 - Shipment creation route/API restricted to the manufacturer role
 - Shipment detail editing for admin and linked manufacturer accounts before
   pickup or in-transit tracking begins
@@ -59,8 +59,11 @@ The project currently includes:
 - System-managed IoT tracking updates with GPS, speed, and condition status
 - Database-backed random telemetry profiles for normal, fast, delayed, idle,
   route deviation, and sensor-warning movement
-- Automatic simulation session provisioning when shipments are created, with a
+- Automatic simulation session provisioning when the assigned manufacturer
+  starts transit, with a
   monitoring-only Simulation page for admin/logistics users
+- Immediate simulation shutdown after arrival, delivery, or cancellation so
+  terminal shipment statuses cannot be replaced by later telemetry evaluation
 - Leaflet map visualization with route history and planned route markers
 - Advanced alert rules for delay, idle, ETA overdue, missing tracking updates,
   route deviation, sensor warning, and progress shortfall
@@ -348,9 +351,8 @@ Manufacturer creates shipment with generated shipment code
 -> Select Mercedes-Benz model
 -> Select registered manufacturer origin
 -> Select registered dealership destination
--> Mark ready for dispatch
--> Mark picked up
--> Mark in transit
+-> Manufacturer optionally marks ready for dispatch and pickup
+-> Assigned manufacturer selects Start Transit
 -> Backend system generates tracking updates
 -> Logistics provider marks shipment arrived
 -> Assigned dealership confirms delivery receipt
@@ -361,6 +363,8 @@ Manufacturer creates shipment with generated shipment code
 
 ```text
 Manufacturer creates shipment with route coordinates
+-> Shipment remains stationary during pre-transit processing
+-> Assigned manufacturer selects Start Transit
 -> Backend creates a system-owned simulation session
 -> Scheduler chooses random database-backed telemetry profile
 -> Scheduler advances GPS progress along the planned origin-to-destination route
@@ -370,10 +374,11 @@ Manufacturer creates shipment with route coordinates
 -> Session completes when destination or max event limit is reached
 ```
 
-The automatic scheduler creates at most one system-managed session for each
-shipment. Its safety event limit is expanded from route distance and weighted
-profile speeds when the configured default would stop the shipment before its
-destination. A completed session is retained as history and is not recreated.
+The automatic scheduler creates at most one active system-managed session for
+each shipment after transit starts. Its safety event limit is expanded from
+route distance and weighted profile speeds when the configured default would
+stop the shipment before its destination. Completed session history is retained;
+a pre-transit legacy session can be replaced when transit starts.
 Alert-engine delay decisions are also retained until a later lifecycle action;
 normal telemetry does not repeatedly toggle the shipment back to `IN_TRANSIT`.
 Normal, delayed, and idle telemetry remains on the planned route. A configured

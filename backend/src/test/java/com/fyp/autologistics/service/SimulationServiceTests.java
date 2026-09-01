@@ -9,7 +9,7 @@ import com.fyp.autologistics.enums.ConditionStatus;
 import com.fyp.autologistics.enums.ShipmentEventSourceType;
 import com.fyp.autologistics.enums.ShipmentStatus;
 import com.fyp.autologistics.enums.SimulationSessionStatus;
-import com.fyp.autologistics.event.ShipmentCreatedEvent;
+import com.fyp.autologistics.event.ShipmentStatusChangedEvent;
 import com.fyp.autologistics.repository.ShipmentRepository;
 import com.fyp.autologistics.repository.SimulationProfileRepository;
 import com.fyp.autologistics.repository.SimulationSessionRepository;
@@ -56,7 +56,7 @@ class SimulationServiceTests {
     );
 
     @Test
-    void completedSessionPreventsAnotherSystemSessionFromBeingCreated() {
+    void transitStartReplacesCompletedPreStartSession() {
         Shipment shipment = buildShipment(ShipmentStatus.IN_TRANSIT);
         SimulationSession completedSession = buildSession(
                 shipment,
@@ -68,10 +68,75 @@ class SimulationServiceTests {
                 .thenReturn(List.of(buildNormalProfile()));
         when(simulationSessionRepository.findFirstByShipmentIdOrderByUpdatedAtDesc(SHIPMENT_ID))
                 .thenReturn(Optional.of(completedSession));
+        when(simulationSessionRepository.save(any(SimulationSession.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
-        simulationService.createSessionAfterShipmentCreated(new ShipmentCreatedEvent(SHIPMENT_ID));
+        simulationService.createSessionAfterTransitStarted(new ShipmentStatusChangedEvent(
+                SHIPMENT_ID,
+                ShipmentStatus.CREATED,
+                ShipmentStatus.IN_TRANSIT,
+                ShipmentEventSourceType.USER_ACTION
+        ));
 
-        verify(simulationSessionRepository, never()).save(any(SimulationSession.class));
+        verify(simulationSessionRepository).save(any(SimulationSession.class));
+    }
+
+    @Test
+    void createdShipmentDoesNotGenerateTrackingBeforeManufacturerStartsTransit() {
+        LocalDateTime now = LocalDateTime.now();
+        Shipment createdShipment = buildShipment(ShipmentStatus.CREATED);
+        SimulationSession legacyActiveSession = buildSession(
+                createdShipment,
+                SimulationSessionStatus.ACTIVE
+        );
+        legacyActiveSession.setNextRunAt(now.minusSeconds(1));
+
+        when(simulationProfileRepository.findByActiveTrueOrderBySortOrderAscDisplayNameAsc())
+                .thenReturn(List.of(buildNormalProfile()));
+        when(shipmentRepository.findShipmentsWithoutSimulationSession(any()))
+                .thenReturn(List.of());
+        when(simulationSessionRepository
+                .findByStatusAndNextRunAtLessThanEqualOrderByNextRunAtAsc(
+                        eq(SimulationSessionStatus.ACTIVE),
+                        any(LocalDateTime.class)
+                ))
+                .thenReturn(List.of(legacyActiveSession));
+
+        simulationService.processDueSimulationSessions();
+
+        assertThat(legacyActiveSession.getStatus()).isEqualTo(SimulationSessionStatus.COMPLETED);
+        verify(trackingEventService, never()).createSystemTrackingEvent(
+                any(),
+                any(CreateTrackingEventRequest.class),
+                any()
+        );
+    }
+
+    @Test
+    void arrivalImmediatelyCompletesActiveSimulationSession() {
+        Shipment shipment = buildShipment(ShipmentStatus.ARRIVED);
+        SimulationSession activeSession = buildSession(
+                shipment,
+                SimulationSessionStatus.ACTIVE
+        );
+
+        when(simulationSessionRepository
+                .findFirstByShipmentIdAndStatusOrderByUpdatedAtDesc(
+                        SHIPMENT_ID,
+                        SimulationSessionStatus.ACTIVE
+                ))
+                .thenReturn(Optional.of(activeSession));
+
+        simulationService.completeSessionAfterTransitEnded(new ShipmentStatusChangedEvent(
+                SHIPMENT_ID,
+                ShipmentStatus.DELAYED,
+                ShipmentStatus.ARRIVED,
+                ShipmentEventSourceType.USER_ACTION
+        ));
+
+        assertThat(activeSession.getStatus()).isEqualTo(SimulationSessionStatus.COMPLETED);
+        assertThat(activeSession.getNextRunAt()).isNull();
+        verify(simulationSessionRepository).save(activeSession);
     }
 
     @Test

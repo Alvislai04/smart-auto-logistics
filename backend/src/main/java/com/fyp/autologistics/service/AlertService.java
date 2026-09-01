@@ -47,12 +47,8 @@ public class AlertService {
     );
 
     private static final Set<ShipmentStatus> MONITORED_STATUSES = Set.of(
-            ShipmentStatus.CREATED,
-            ShipmentStatus.READY_FOR_DISPATCH,
-            ShipmentStatus.PICKED_UP,
             ShipmentStatus.IN_TRANSIT,
-            ShipmentStatus.DELAYED,
-            ShipmentStatus.ARRIVED
+            ShipmentStatus.DELAYED
     );
 
     private final AlertRepository alertRepository;

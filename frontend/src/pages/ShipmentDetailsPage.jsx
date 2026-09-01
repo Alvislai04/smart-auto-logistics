@@ -206,6 +206,10 @@ function ShipmentDetailsPage() {
 
   const canConfirmReceipt = canUserConfirmShipmentReceipt(shipment, currentUser);
   const canEditShipment = isShipmentEditableForUser(shipment, currentUser);
+  const canManageShipmentWorkflow =
+    ["ADMIN", "LOGISTICS_PROVIDER"].includes(currentUserRole) ||
+    (currentUserRole === "MANUFACTURER" &&
+      currentUser?.partyProfileKey === shipment.manufacturerKey);
 
   return (
     <div className="page">
@@ -261,12 +265,13 @@ function ShipmentDetailsPage() {
             </DetailItem>
           </div>
 
-          {["ADMIN", "LOGISTICS_PROVIDER"].includes(currentUserRole) && (
+          {canManageShipmentWorkflow && (
             <div className="status-action-section">
               <h4>Shipment Workflow Actions</h4>
 
               <ShipmentStatusActions
                 currentStatus={shipment.status}
+                currentUserRole={currentUserRole}
                 isUpdating={isUpdatingStatus}
                 onUpdateStatus={handleUpdateStatus}
               />
