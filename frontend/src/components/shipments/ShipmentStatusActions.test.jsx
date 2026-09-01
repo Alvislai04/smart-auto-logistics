@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { hasAvailableShipmentStatusActions } from "../../utils/shipmentStatusActions";
 import ShipmentStatusActions from "./ShipmentStatusActions";
 
 describe("ShipmentStatusActions", () => {
@@ -23,6 +24,10 @@ describe("ShipmentStatusActions", () => {
   });
 
   it("does not expose any logistics action after arrival", () => {
+    expect(
+      hasAvailableShipmentStatusActions("ARRIVED", "LOGISTICS_PROVIDER"),
+    ).toBe(false);
+
     render(
       <ShipmentStatusActions
         currentStatus="ARRIVED"

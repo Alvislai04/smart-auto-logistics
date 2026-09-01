@@ -18,6 +18,7 @@ import {
   formatEnumLabel,
 } from "../utils/formatters";
 import { isShipmentEditableForUser } from "../utils/shipmentFormUtils";
+import { hasAvailableShipmentStatusActions } from "../utils/shipmentStatusActions";
 import { canUserConfirmShipmentReceipt } from "../utils/shipmentWorkflowUtils";
 
 function DetailItem({ label, children }) {
@@ -206,10 +207,13 @@ function ShipmentDetailsPage() {
 
   const canConfirmReceipt = canUserConfirmShipmentReceipt(shipment, currentUser);
   const canEditShipment = isShipmentEditableForUser(shipment, currentUser);
-  const canManageShipmentWorkflow =
+  const hasShipmentWorkflowAccess =
     ["ADMIN", "LOGISTICS_PROVIDER"].includes(currentUserRole) ||
     (currentUserRole === "MANUFACTURER" &&
       currentUser?.partyProfileKey === shipment.manufacturerKey);
+  const canManageShipmentWorkflow =
+    hasShipmentWorkflowAccess &&
+    hasAvailableShipmentStatusActions(shipment.status, currentUserRole);
 
   return (
     <div className="page">

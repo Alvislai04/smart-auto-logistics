@@ -1,42 +1,4 @@
-const STATUS_ACTIONS = [
-  {
-    label: "Mark Ready",
-    status: "READY_FOR_DISPATCH",
-    allowedFrom: ["CREATED"],
-    allowedRoles: ["MANUFACTURER"],
-  },
-  {
-    label: "Mark Picked Up",
-    status: "PICKED_UP",
-    allowedFrom: ["READY_FOR_DISPATCH"],
-    allowedRoles: ["MANUFACTURER"],
-  },
-  {
-    label: "Start Transit",
-    status: "IN_TRANSIT",
-    allowedFrom: ["CREATED", "READY_FOR_DISPATCH", "PICKED_UP", "DELAYED"],
-    allowedRoles: ["MANUFACTURER"],
-  },
-  {
-    label: "Mark Arrived",
-    status: "ARRIVED",
-    allowedFrom: ["IN_TRANSIT", "DELAYED"],
-    allowedRoles: ["LOGISTICS_PROVIDER"],
-  },
-  {
-    label: "Cancel",
-    status: "CANCELLED",
-    allowedFrom: [
-      "CREATED",
-      "READY_FOR_DISPATCH",
-      "PICKED_UP",
-      "IN_TRANSIT",
-      "DELAYED",
-    ],
-    allowedRoles: ["ADMIN", "MANUFACTURER", "LOGISTICS_PROVIDER"],
-    danger: true,
-  },
-];
+import { getAvailableShipmentStatusActions } from "../../utils/shipmentStatusActions";
 
 function ShipmentStatusActions({
   currentStatus,
@@ -44,10 +6,9 @@ function ShipmentStatusActions({
   isUpdating,
   onUpdateStatus,
 }) {
-  const availableActions = STATUS_ACTIONS.filter(
-    (action) =>
-      action.allowedFrom.includes(currentStatus) &&
-      action.allowedRoles.includes(currentUserRole),
+  const availableActions = getAvailableShipmentStatusActions(
+    currentStatus,
+    currentUserRole,
   );
 
   if (availableActions.length === 0) {
