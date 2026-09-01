@@ -156,14 +156,14 @@ smart-auto-logistics/
 
 ## Technology Stack
 
-| Layer | Technology |
-| --- | --- |
-| Frontend | React, Vite, React Router, Axios, Leaflet |
-| Backend | Java 21, Spring Boot, Spring Security, Spring Data JPA |
-| Database | Supabase PostgreSQL |
-| Blockchain | Solidity, Hardhat, Web3j |
-| Authentication | JWT, BCrypt |
-| Build Tools | Maven, npm |
+| Layer          | Technology                                             |
+| -------------- | ------------------------------------------------------ |
+| Frontend       | React, Vite, React Router, Axios, Leaflet              |
+| Backend        | Java 21, Spring Boot, Spring Security, Spring Data JPA |
+| Database       | Supabase PostgreSQL                                    |
+| Blockchain     | Solidity, Hardhat, Web3j                               |
+| Authentication | JWT, BCrypt                                            |
+| Build Tools    | Maven, npm                                             |
 
 ## Environment Configuration
 
@@ -419,18 +419,6 @@ For hosted transactions, the backend obtains the connected network's chain ID
 and current gas price before signing. `BLOCKCHAIN_GAS_PRICE_WEI=0` enables this
 automatic pricing; a positive value remains available as an explicit override.
 
-### Disabled Blockchain Failure Cleanup
-
-Older application versions stored one failed blockchain row for every automatic
-shipment event while blockchain integration was disabled. After deploying the
-current backend, run
-[`database/maintenance/2026-08-28-remove-disabled-blockchain-failures.sql`](database/maintenance/2026-08-28-remove-disabled-blockchain-failures.sql)
-once in the Supabase SQL Editor. The script removes only that exact disabled-mode
-failure and its linked admin notification; legitimate recorded, pending,
-verification-failure, and shipment-event data is preserved. It uses direct
-table joins and does not rely on temporary tables that may be dropped between
-Supabase SQL Editor statements.
-
 ## Useful Commands
 
 Backend tests:
@@ -484,59 +472,3 @@ Production dependency audit for blockchain workspace:
 cd blockchain
 npm audit --omit=dev
 ```
-
-## Recent Implementation Update
-
-The latest completed step added formal automated testing, production smoke
-verification, and initial-load optimization on top of the completed stock,
-order-notification, and deployment work:
-
-- Added `stock_alert_rules` with generated unique rule keys and database-backed
-  company, vehicle model, stage, minimum quantity, and active state
-- Added role-scoped `GET /api/stock-monitoring` and admin-only rule create/update
-  APIs
-- Added scheduled and shipment-event-triggered stock evaluation, automatic
-  shortage alert creation/update, and automatic recovery resolution
-- Added a responsive Stock Monitoring page with administrator rule controls and
-  read-only manufacturer/dealership views
-- Added order-update alerts for user, IoT-simulation, and alert-engine status
-  transitions while preserving prior notifications as resolved history
-- Extended alert references and role scopes so stock alerts never masquerade as
-  shipment alerts
-- Added the required Supabase migration without seed or test rows
-- Added backend/frontend Dockerfiles, production Compose, centralized CORS,
-  Spring health probes, and Nginx reverse proxy configuration
-- Added isolated H2 test configuration so automated tests never touch Supabase
-- Added controller security/validation, shipment lifecycle, order-update, and
-  blockchain failure/retry integration coverage
-- Added React component coverage for stock rules and role-scoped alert actions
-- Added route-level lazy loading, reducing initial JavaScript from 570.18 kB to
-  291.28 kB and removing the production build warning
-- Removed an unused legacy fixed-URL API client
-- Verified 30 backend tests, 7 frontend component tests, full lint/build, 2
-  Solidity tests, and zero frontend/blockchain production audit findings
-- Built and ran the latest Nginx image, verified backend health and browser
-  redirects, and recorded a 50-request health baseline with 217.57 ms P95
-- Added a reusable UAT checklist and dated automated test report
-- Re-audited the approved IR gap-review scope and found no remaining code
-  implementation gaps
-- Diagnosed production blockchain-record growth caused by completed simulation
-  recreation and `DELAYED`/`IN_TRANSIT` status oscillation
-- Prevented repeat simulation sessions and retained alert-engine delay state
-- Changed disabled blockchain mode to skip automatic writes without creating
-  failed records or notifications
-- Added focused regression coverage and a conservative Supabase cleanup script
-- Verified 33 backend tests, 9 frontend tests, frontend lint, and the production
-  frontend build
-- Added secure Sepolia deployment support and verified both Solidity tests
-- Added Sepolia-safe EIP-155 transaction signing and node-provided gas pricing
-- Verified the clean backend build with 36 tests and no failures
-
-## Known Remaining Work
-
-See [PROJECT_PROGRESS.md](PROJECT_PROGRESS.md) for the full checklist. All
-functions selected in the IR gap-review scope are implemented and the automated
-test suite is green. Remaining sign-off work is deploying the latest prepared
-backend, enabling and smoke-testing the configured Sepolia integration,
-completing manual UAT with current Supabase accounts, and updating the final
-report from Vue.js to React + Vite.
