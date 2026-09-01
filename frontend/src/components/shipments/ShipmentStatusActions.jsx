@@ -20,11 +20,6 @@ const STATUS_ACTIONS = [
     allowedFrom: ["IN_TRANSIT", "DELAYED"],
   },
   {
-    label: "Mark Delivered",
-    status: "DELIVERED",
-    allowedFrom: ["ARRIVED"],
-  },
-  {
     label: "Cancel",
     status: "CANCELLED",
     allowedFrom: [

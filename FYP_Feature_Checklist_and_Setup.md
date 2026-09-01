@@ -51,6 +51,9 @@ Legend:
 - [x] Shipment status enum
 - [x] Backend validation for valid shipment status transitions
 - [x] Prevent invalid transition such as `CREATED -> DELIVERED`
+- [x] Prevent logistics/admin status actions from bypassing dealership receipt confirmation
+- [x] Restrict receipt confirmation to the dealership assigned by `dealership_key`
+- [x] Set `DELIVERED` only after assigned dealership receipt confirmation
 - [x] Prevent updates after `DELIVERED`
 - [x] Prevent updates after `CANCELLED`
 
@@ -357,7 +360,7 @@ Mark Ready
 Mark Picked Up
 Mark In Transit
 Mark Arrived
-Mark Delivered
+Confirm Receipt (assigned dealership; completes delivery)
 Cancel
 ```
 
@@ -484,6 +487,7 @@ Suggested access:
 | Dashboard                  |   Yes |          Yes |                Yes |        Yes |
 | Create Shipment            |   Yes |          Yes |                 No |         No |
 | Update Shipment Status     |   Yes |      Limited |                Yes |    Limited |
+| Confirm Delivery Receipt   |    No |           No |                 No | Assigned only |
 | Simulate / Tracking Update |   Yes |           No |                Yes |         No |
 | View Alerts                |   Yes |          Yes |                Yes |        Yes |
 | Resolve Alerts             |   Yes |      Limited |                Yes |         No |

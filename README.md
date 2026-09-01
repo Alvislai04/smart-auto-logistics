@@ -54,7 +54,8 @@ The project currently includes:
 - Shipment operation data for ETD, ETA, logistics stage, stock/WIP state,
   responsible person, customer receiver details, and document reference
 - Planned route coordinates for route deviation and progress monitoring
-- Delivery receipt confirmation with audit/blockchain event recording
+- Delivery receipt confirmation restricted to the assigned dealership, with
+  authenticated actor attribution and audit/blockchain event recording
 - System-managed IoT tracking updates with GPS, speed, and condition status
 - Database-backed random telemetry profiles for normal, fast, delayed, idle,
   route deviation, and sensor-warning movement
@@ -351,8 +352,8 @@ Manufacturer creates shipment with generated shipment code
 -> Mark picked up
 -> Mark in transit
 -> Backend system generates tracking updates
--> Mark arrived
--> Confirm delivery receipt
+-> Logistics provider marks shipment arrived
+-> Assigned dealership confirms delivery receipt
 -> Shipment becomes delivered
 ```
 

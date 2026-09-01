@@ -1,5 +1,6 @@
 package com.fyp.autologistics.service;
 
+import com.fyp.autologistics.dto.ConfirmDeliveryReceiptRequest;
 import com.fyp.autologistics.dto.ShipmentResponse;
 import com.fyp.autologistics.entity.AppUser;
 import com.fyp.autologistics.entity.Shipment;
@@ -143,6 +144,99 @@ class ShipmentServiceTests {
     }
 
     @Test
+    void deliveredStatusRequiresAssignedDealershipReceiptConfirmation() {
+        Shipment shipment = buildShipment(
+                ShipmentStatus.ARRIVED,
+                LogisticsStage.ARRIVED_AT_DEALERSHIP
+        );
+        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(authenticatedUserService.getAuthenticatedUser("logistics@example.com"))
+                .thenReturn(buildActor(
+                        "Logistics Operator",
+                        "logistics@example.com",
+                        UserRole.LOGISTICS_PROVIDER,
+                        "LSP-001"
+                ));
+
+        assertThatThrownBy(() -> shipmentService.updateShipmentStatus(
+                42L,
+                ShipmentStatus.DELIVERED,
+                "logistics@example.com"
+        ))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("assigned dealership confirms receipt");
+
+        assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.ARRIVED);
+        verify(shipmentRepository, never()).save(any(Shipment.class));
+    }
+
+    @Test
+    void assignedDealershipConfirmationCompletesDeliveryAndUsesAuthenticatedActor() {
+        Shipment shipment = buildShipment(
+                ShipmentStatus.ARRIVED,
+                LogisticsStage.ARRIVED_AT_DEALERSHIP
+        );
+        shipment.setDealershipKey("DLR-001");
+        AppUser dealership = buildActor(
+                "Dealership Receiver",
+                "dealer@example.com",
+                UserRole.DEALERSHIP,
+                "DLR-001"
+        );
+        ConfirmDeliveryReceiptRequest request = new ConfirmDeliveryReceiptRequest();
+        request.setConfirmedBy("Untrusted Client Value");
+
+        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(authenticatedUserService.getAuthenticatedUser("dealer@example.com"))
+                .thenReturn(dealership);
+        when(shipmentRepository.save(shipment)).thenReturn(shipment);
+        when(shipmentEventRepository.save(any(ShipmentEvent.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ShipmentResponse response = shipmentService.confirmDeliveryReceipt(
+                42L,
+                request,
+                "dealer@example.com"
+        );
+
+        assertThat(response.getStatus()).isEqualTo(ShipmentStatus.DELIVERED);
+        assertThat(response.getCurrentStage()).isEqualTo(LogisticsStage.DELIVERED);
+        assertThat(response.getReceiptConfirmedBy()).isEqualTo("Dealership Receiver");
+        assertThat(response.getReceiptConfirmedAt()).isNotNull();
+    }
+
+    @Test
+    void unassignedDealershipCannotConfirmReceipt() {
+        Shipment shipment = buildShipment(
+                ShipmentStatus.ARRIVED,
+                LogisticsStage.ARRIVED_AT_DEALERSHIP
+        );
+        shipment.setDealershipKey("DLR-001");
+        ConfirmDeliveryReceiptRequest request = new ConfirmDeliveryReceiptRequest();
+        request.setConfirmedBy("Other Dealership");
+
+        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(authenticatedUserService.getAuthenticatedUser("other@example.com"))
+                .thenReturn(buildActor(
+                        "Other Dealership",
+                        "other@example.com",
+                        UserRole.DEALERSHIP,
+                        "DLR-002"
+                ));
+
+        assertThatThrownBy(() -> shipmentService.confirmDeliveryReceipt(
+                42L,
+                request,
+                "other@example.com"
+        ))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("dealership assigned to this shipment");
+
+        assertThat(shipment.getReceiptConfirmedAt()).isNull();
+        verify(shipmentRepository, never()).save(any(Shipment.class));
+    }
+
+    @Test
     void systemStageOnlyChangeDoesNotCreateOrderUpdate() {
         Shipment shipment = buildShipment(
                 ShipmentStatus.READY_FOR_DISPATCH,
@@ -202,11 +296,26 @@ class ShipmentServiceTests {
     }
 
     private AppUser buildActor() {
+        return buildActor(
+                "System Administrator",
+                "admin@example.com",
+                UserRole.ADMIN,
+                null
+        );
+    }
+
+    private AppUser buildActor(
+            String fullName,
+            String email,
+            UserRole role,
+            String partyProfileKey
+    ) {
         AppUser actor = new AppUser();
         ReflectionTestUtils.setField(actor, "id", 7L);
-        actor.setFullName("System Administrator");
-        actor.setEmail("admin@example.com");
-        actor.setRole(UserRole.ADMIN);
+        actor.setFullName(fullName);
+        actor.setEmail(email);
+        actor.setRole(role);
+        actor.setPartyProfileKey(partyProfileKey);
         return actor;
     }
 }

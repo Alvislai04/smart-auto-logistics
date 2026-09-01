@@ -18,8 +18,7 @@ import {
   formatEnumLabel,
 } from "../utils/formatters";
 import { isShipmentEditableForUser } from "../utils/shipmentFormUtils";
-
-const receiptConfirmationRoles = ["ADMIN", "LOGISTICS_PROVIDER", "DEALERSHIP"];
+import { canUserConfirmShipmentReceipt } from "../utils/shipmentWorkflowUtils";
 
 function DetailItem({ label, children }) {
   return (
@@ -205,10 +204,7 @@ function ShipmentDetailsPage() {
     return <p>Shipment not found.</p>;
   }
 
-  const canConfirmReceipt =
-    receiptConfirmationRoles.includes(currentUserRole) &&
-    !shipment.receiptConfirmedAt &&
-    ["ARRIVED", "DELIVERED"].includes(shipment.status);
+  const canConfirmReceipt = canUserConfirmShipmentReceipt(shipment, currentUser);
   const canEditShipment = isShipmentEditableForUser(shipment, currentUser);
 
   return (
@@ -349,7 +345,7 @@ function ShipmentDetailsPage() {
             ) : (
               <>
                 <strong>Receipt Pending</strong>
-                <span>Awaiting receiver confirmation.</span>
+                <span>Awaiting confirmation from the assigned dealership.</span>
 
                 {canConfirmReceipt && (
                   <button

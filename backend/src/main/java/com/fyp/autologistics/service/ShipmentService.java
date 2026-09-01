@@ -337,6 +337,7 @@ public class ShipmentService {
         ShipmentStatus previousStatus = shipment.getStatus();
 
         validateStatusTransition(previousStatus, status);
+        validateManualStatusUpdateAllowed(status);
 
         if (previousStatus == status) {
             return mapToResponse(shipment);
@@ -375,6 +376,8 @@ public class ShipmentService {
         Shipment shipment = findShipmentEntityById(id);
         AppUser actor = authenticatedUserService.getAuthenticatedUser(actorEmail);
 
+        validateReceiptConfirmationAllowed(shipment, actor);
+
         if (shipment.getReceiptConfirmedAt() != null) {
             throw new BadRequestException("Delivery receipt has already been confirmed.");
         }
@@ -387,7 +390,7 @@ public class ShipmentService {
         }
 
         ShipmentStatus previousStatus = shipment.getStatus();
-        String confirmedBy = normalizeText(request.getConfirmedBy());
+        String confirmedBy = resolveActorLabel(actor);
 
         shipment.setReceiptConfirmedAt(LocalDateTime.now());
         shipment.setReceiptConfirmedBy(confirmedBy);
@@ -519,6 +522,37 @@ public class ShipmentService {
                         + currentStatus
                         + " to "
                         + nextStatus
+            );
+        }
+    }
+
+    private void validateManualStatusUpdateAllowed(ShipmentStatus nextStatus) {
+        if (nextStatus == ShipmentStatus.DELIVERED) {
+            throw new BadRequestException(
+                    "A shipment becomes delivered only when its assigned dealership confirms receipt."
+            );
+        }
+    }
+
+    private void validateReceiptConfirmationAllowed(Shipment shipment, AppUser actor) {
+        if (actor.getRole() != UserRole.DEALERSHIP) {
+            throw new BadRequestException(
+                    "Only the assigned dealership can confirm delivery receipt."
+            );
+        }
+
+        String actorPartyKey = normalizeText(actor.getPartyProfileKey());
+        String shipmentDealershipKey = normalizeText(shipment.getDealershipKey());
+
+        if (actorPartyKey == null) {
+            throw new BadRequestException(
+                    "Your dealership account is not linked to a shipment party profile."
+            );
+        }
+
+        if (!actorPartyKey.equals(shipmentDealershipKey)) {
+            throw new BadRequestException(
+                    "Only the dealership assigned to this shipment can confirm its receipt."
             );
         }
     }

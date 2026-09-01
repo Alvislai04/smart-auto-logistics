@@ -43,6 +43,8 @@ class ShipmentLifecycleIntegrationTests {
 
     private static final String MANUFACTURER_EMAIL = "manufacturer@integration.invalid";
     private static final String ADMIN_EMAIL = "admin@integration.invalid";
+    private static final String LOGISTICS_EMAIL = "logistics@integration.invalid";
+    private static final String DEALERSHIP_EMAIL = "dealership@integration.invalid";
     private static final String TEST_PASSWORD = "Integration-Only-Password-42";
 
     @Autowired
@@ -82,6 +84,8 @@ class ShipmentLifecycleIntegrationTests {
 
         String manufacturerToken = login(MANUFACTURER_EMAIL);
         String adminToken = login(ADMIN_EMAIL);
+        String logisticsToken = login(LOGISTICS_EMAIL);
+        String dealershipToken = login(DEALERSHIP_EMAIL);
         String estimatedArrival = LocalDateTime.now(applicationClock)
                 .plusDays(1)
                 .withNano(0)
@@ -137,13 +141,53 @@ class ShipmentLifecycleIntegrationTests {
                 .andExpect(jsonPath("$.status").value("READY_FOR_DISPATCH"))
                 .andExpect(jsonPath("$.currentStage").value("READY_FOR_DISPATCH"));
 
+        updateStatusAsLogistics(shipmentId, logisticsToken, "PICKED_UP");
+        updateStatusAsLogistics(shipmentId, logisticsToken, "IN_TRANSIT");
+        updateStatusAsLogistics(shipmentId, logisticsToken, "ARRIVED");
+
+        mockMvc.perform(put("/api/shipments/{shipmentId}/status", shipmentId)
+                        .queryParam("status", "DELIVERED")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(logisticsToken)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "A shipment becomes delivered only when its assigned dealership confirms receipt."
+                ));
+
+        mockMvc.perform(put("/api/shipments/{shipmentId}/receipt-confirmation", shipmentId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(logisticsToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "confirmedBy": "Logistics must not confirm receipt"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/shipments/{shipmentId}/receipt-confirmation", shipmentId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(dealershipToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "confirmedBy": "Client-supplied name is not trusted"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DELIVERED"))
+                .andExpect(jsonPath("$.currentStage").value("DELIVERED"))
+                .andExpect(jsonPath("$.receiptConfirmedBy").value("Integration DEALERSHIP"));
+
         List<ShipmentEvent> history = shipmentEventRepository
                 .findByShipmentIdOrderByCreatedAtDesc(shipmentId);
         assertThat(history)
                 .extracting(ShipmentEvent::getEventType)
-                .contains(ShipmentEventType.SHIPMENT_CREATED, ShipmentEventType.STATUS_CHANGED);
+                .contains(
+                        ShipmentEventType.SHIPMENT_CREATED,
+                        ShipmentEventType.STATUS_CHANGED,
+                        ShipmentEventType.DELIVERY_CONFIRMED
+                );
         assertThat(history)
-                .filteredOn(event -> event.getEventType() == ShipmentEventType.STATUS_CHANGED)
+                .filteredOn(event -> event.getEventType() == ShipmentEventType.STATUS_CHANGED
+                        && "READY_FOR_DISPATCH".equals(event.getNewStatus()))
                 .singleElement()
                 .satisfies(event -> {
                     assertThat(event.getActorEmail()).isEqualTo(ADMIN_EMAIL);
@@ -215,6 +259,28 @@ class ShipmentLifecycleIntegrationTests {
                 "MFG-INTEGRATION"
         ));
         appUserRepository.save(buildUser(ADMIN_EMAIL, UserRole.ADMIN, null));
+        appUserRepository.save(buildUser(
+                LOGISTICS_EMAIL,
+                UserRole.LOGISTICS_PROVIDER,
+                null
+        ));
+        appUserRepository.save(buildUser(
+                DEALERSHIP_EMAIL,
+                UserRole.DEALERSHIP,
+                "DLR-INTEGRATION"
+        ));
+    }
+
+    private void updateStatusAsLogistics(
+            long shipmentId,
+            String logisticsToken,
+            String nextStatus
+    ) throws Exception {
+        mockMvc.perform(put("/api/shipments/{shipmentId}/status", shipmentId)
+                        .queryParam("status", nextStatus)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(logisticsToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value(nextStatus));
     }
 
     private ShipmentPartyProfile buildParty(
