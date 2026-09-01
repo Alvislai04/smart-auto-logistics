@@ -99,6 +99,8 @@ CANCELLED
 - [x] Stop active simulation immediately after arrival, delivery, or cancellation
 - [x] Restrict delay monitoring to `IN_TRANSIT` and `DELAYED` shipments
 - [x] Prevent historical telemetry from reverting `ARRIVED` to `DELAYED`
+- [x] Lock logistics workflow actions after `ARRIVED`; dealership receipt is the
+  only delivery-completion action
 
 Current condition statuses:
 

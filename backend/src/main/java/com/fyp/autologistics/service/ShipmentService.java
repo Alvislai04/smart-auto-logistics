@@ -512,8 +512,7 @@ public class ShipmentService {
                     || nextStatus == ShipmentStatus.ARRIVED
                     || nextStatus == ShipmentStatus.CANCELLED;
 
-            case ARRIVED -> nextStatus == ShipmentStatus.DELIVERED
-                    || nextStatus == ShipmentStatus.CANCELLED;
+            case ARRIVED -> nextStatus == ShipmentStatus.DELIVERED;
 
             case DELIVERED, CANCELLED -> false;
         };

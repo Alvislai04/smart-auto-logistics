@@ -177,6 +177,33 @@ class ShipmentServiceTests {
     }
 
     @Test
+    void logisticsProviderCannotCancelAfterShipmentArrives() {
+        Shipment shipment = buildShipment(
+                ShipmentStatus.ARRIVED,
+                LogisticsStage.ARRIVED_AT_DEALERSHIP
+        );
+        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(authenticatedUserService.getAuthenticatedUser("logistics@example.com"))
+                .thenReturn(buildActor(
+                        "Logistics Operator",
+                        "logistics@example.com",
+                        UserRole.LOGISTICS_PROVIDER,
+                        "LSP-001"
+                ));
+
+        assertThatThrownBy(() -> shipmentService.updateShipmentStatus(
+                42L,
+                ShipmentStatus.CANCELLED,
+                "logistics@example.com"
+        ))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Invalid shipment status transition");
+
+        assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.ARRIVED);
+        verify(shipmentRepository, never()).save(any(Shipment.class));
+    }
+
+    @Test
     void assignedManufacturerCanStartTransitDirectlyFromCreated() {
         Shipment shipment = buildShipment(ShipmentStatus.CREATED, LogisticsStage.STOCK_YARD);
         shipment.setManufacturerKey("MFG-001");

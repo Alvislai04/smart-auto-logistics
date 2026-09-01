@@ -154,6 +154,14 @@ class ShipmentLifecycleIntegrationTests {
         updateStatusAsLogistics(shipmentId, logisticsToken, "ARRIVED");
 
         mockMvc.perform(put("/api/shipments/{shipmentId}/status", shipmentId)
+                        .queryParam("status", "CANCELLED")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(logisticsToken)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        "Invalid shipment status transition from ARRIVED to CANCELLED"
+                ));
+
+        mockMvc.perform(put("/api/shipments/{shipmentId}/status", shipmentId)
                         .queryParam("status", "DELIVERED")
                         .header(HttpHeaders.AUTHORIZATION, bearer(logisticsToken)))
                 .andExpect(status().isBadRequest())

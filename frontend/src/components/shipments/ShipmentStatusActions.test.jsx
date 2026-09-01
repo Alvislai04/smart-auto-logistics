@@ -22,7 +22,7 @@ describe("ShipmentStatusActions", () => {
     expect(onUpdateStatus).toHaveBeenCalledWith("ARRIVED");
   });
 
-  it("does not expose a manual delivered action after arrival", () => {
+  it("does not expose any logistics action after arrival", () => {
     render(
       <ShipmentStatusActions
         currentStatus="ARRIVED"
@@ -34,6 +34,12 @@ describe("ShipmentStatusActions", () => {
 
     expect(
       screen.queryByRole("button", { name: "Mark Delivered" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Cancel" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Confirm Receipt" }),
     ).not.toBeInTheDocument();
   });
 

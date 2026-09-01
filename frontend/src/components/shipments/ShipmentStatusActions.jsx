@@ -32,7 +32,6 @@ const STATUS_ACTIONS = [
       "PICKED_UP",
       "IN_TRANSIT",
       "DELAYED",
-      "ARRIVED",
     ],
     allowedRoles: ["ADMIN", "MANUFACTURER", "LOGISTICS_PROVIDER"],
     danger: true,

@@ -355,6 +355,7 @@ Manufacturer creates shipment with generated shipment code
 -> Assigned manufacturer selects Start Transit
 -> Backend system generates tracking updates
 -> Logistics provider marks shipment arrived
+-> Logistics workflow actions end at the dealership handoff
 -> Assigned dealership confirms delivery receipt
 -> Shipment becomes delivered
 ```
