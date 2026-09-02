@@ -32,6 +32,19 @@ describe("canUserConfirmShipmentReceipt", () => {
     ).toBe(false);
   });
 
+  it("accepts arrival when the stage indicates the dealership has received the shipment", () => {
+    expect(
+      canUserConfirmShipmentReceipt(
+        {
+          ...arrivedShipment,
+          status: "IN_TRANSIT",
+          currentStage: "ARRIVED_AT_DEALERSHIP",
+        },
+        { role: "DEALERSHIP", partyProfileKey: "DLR-KL-001" },
+      ),
+    ).toBe(true);
+  });
+
   it("rejects confirmation before arrival or after receipt is recorded", () => {
     expect(
       canUserConfirmShipmentReceipt(

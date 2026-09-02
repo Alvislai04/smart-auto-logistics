@@ -374,6 +374,38 @@ class ShipmentServiceTests {
     }
 
     @Test
+    void arrivalStageAllowsDealershipReceiptConfirmationEvenIfStatusIsStale() {
+        Shipment shipment = buildShipment(
+                ShipmentStatus.IN_TRANSIT,
+                LogisticsStage.ARRIVED_AT_DEALERSHIP
+        );
+        shipment.setDealershipKey("DLR-001");
+        AppUser dealership = buildActor(
+                "Dealership Receiver",
+                "dealer@example.com",
+                UserRole.DEALERSHIP,
+                "DLR-001"
+        );
+        ConfirmDeliveryReceiptRequest request = new ConfirmDeliveryReceiptRequest();
+
+        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(authenticatedUserService.getAuthenticatedUser("dealer@example.com"))
+                .thenReturn(dealership);
+        when(shipmentRepository.save(shipment)).thenReturn(shipment);
+        when(shipmentEventRepository.save(any(ShipmentEvent.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ShipmentResponse response = shipmentService.confirmDeliveryReceipt(
+                42L,
+                request,
+                "dealer@example.com"
+        );
+
+        assertThat(response.getStatus()).isEqualTo(ShipmentStatus.DELIVERED);
+        assertThat(response.getCurrentStage()).isEqualTo(LogisticsStage.DELIVERED);
+    }
+
+    @Test
     void unassignedDealershipCannotConfirmReceipt() {
         Shipment shipment = buildShipment(
                 ShipmentStatus.ARRIVED,

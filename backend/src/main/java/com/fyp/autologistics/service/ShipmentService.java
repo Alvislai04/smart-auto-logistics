@@ -388,8 +388,13 @@ public class ShipmentService {
             throw new BadRequestException("Delivery receipt has already been confirmed.");
         }
 
-        if (shipment.getStatus() != ShipmentStatus.ARRIVED
-                && shipment.getStatus() != ShipmentStatus.DELIVERED) {
+        boolean shipmentHasArrived =
+                shipment.getStatus() == ShipmentStatus.ARRIVED
+                        || shipment.getStatus() == ShipmentStatus.DELIVERED
+                        || shipment.getCurrentStage() == LogisticsStage.ARRIVED_AT_DEALERSHIP
+                        || shipment.getCurrentStage() == LogisticsStage.DELIVERED;
+
+        if (!shipmentHasArrived) {
             throw new BadRequestException(
                     "Delivery receipt can only be confirmed after the shipment arrives."
             );
