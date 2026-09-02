@@ -7,9 +7,10 @@ import {
   applyDealershipSelection,
   applyLoadedOptions,
   applyManufacturerSelection,
-  buildShipmentPayload,
+  buildCreateShipmentPayload,
   emptyShipmentFormOptions,
   initialShipmentFormData,
+  minimumFutureDateTimeLocalValue,
   normalizeShipmentFormOptions,
   validateShipmentForm,
 } from "../utils/shipmentFormUtils";
@@ -40,9 +41,7 @@ function CreateShipmentPage() {
       if (
         normalizedOptions.vehicleModels.length === 0 ||
         normalizedOptions.manufacturerOrigins.length === 0 ||
-        normalizedOptions.dealershipDestinations.length === 0 ||
-        normalizedOptions.logisticsStageOptions.length === 0 ||
-        normalizedOptions.workInProgressStatusOptions.length === 0
+        normalizedOptions.dealershipDestinations.length === 0
       ) {
         setErrorMessage(
           "Shipment options are incomplete. Please configure shipment master data before creating shipments.",
@@ -84,6 +83,7 @@ function CreateShipmentPage() {
   const validateForm = () => {
     const validationMessage = validateShipmentForm(formData, {
       automaticDeparture: true,
+      systemManagedInitialState: true,
     });
 
     if (validationMessage) {
@@ -105,7 +105,7 @@ function CreateShipmentPage() {
       setIsSubmitting(true);
       setErrorMessage("");
 
-      const payload = buildShipmentPayload(formData);
+      const payload = buildCreateShipmentPayload(formData);
       const createdShipment = await shipmentApi.create(payload);
 
       showToast({
@@ -147,6 +147,8 @@ function CreateShipmentPage() {
         formData={formData}
         formOptions={formOptions}
         isDepartureAutomatic
+        isInitialStateSystemManaged
+        minimumEstimatedArrival={minimumFutureDateTimeLocalValue()}
         isLoadingOptions={isLoadingOptions}
         isSubmitting={isSubmitting}
         submitButtonLabel="Create Shipment"

@@ -1,26 +1,8 @@
 const SHIPMENT_STATUS_ACTIONS = [
   {
-    label: "Mark Ready",
-    status: "READY_FOR_DISPATCH",
-    allowedFrom: ["CREATED"],
-    allowedRoles: ["MANUFACTURER"],
-  },
-  {
-    label: "Mark Picked Up",
-    status: "PICKED_UP",
-    allowedFrom: ["READY_FOR_DISPATCH"],
-    allowedRoles: ["MANUFACTURER"],
-  },
-  {
     label: "Start Transit",
     status: "IN_TRANSIT",
-    allowedFrom: ["CREATED", "READY_FOR_DISPATCH", "PICKED_UP", "DELAYED"],
-    allowedRoles: ["MANUFACTURER"],
-  },
-  {
-    label: "Mark Arrived",
-    status: "ARRIVED",
-    allowedFrom: ["IN_TRANSIT", "DELAYED"],
+    allowedFrom: ["CREATED", "READY_FOR_DISPATCH", "PICKED_UP"],
     allowedRoles: ["LOGISTICS_PROVIDER"],
   },
   {
@@ -33,7 +15,7 @@ const SHIPMENT_STATUS_ACTIONS = [
       "IN_TRANSIT",
       "DELAYED",
     ],
-    allowedRoles: ["ADMIN", "MANUFACTURER", "LOGISTICS_PROVIDER"],
+    allowedRoles: ["LOGISTICS_PROVIDER"],
     danger: true,
   },
 ];

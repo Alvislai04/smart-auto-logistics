@@ -4,6 +4,8 @@ function ShipmentForm({
   shipmentCode = "",
   isReadOnly = false,
   isDepartureAutomatic = false,
+  isInitialStateSystemManaged = false,
+  minimumEstimatedArrival,
   isLoadingOptions,
   isSubmitting,
   submitButtonLabel,
@@ -154,29 +156,32 @@ function ShipmentForm({
               type="datetime-local"
               name="estimatedArrival"
               value={formData.estimatedArrival}
+              min={minimumEstimatedArrival}
               onChange={onChange}
               disabled={isReadOnly}
               required
             />
           </label>
 
-          <label>
-            Current Logistics Stage
-            <select
-              name="currentStage"
-              value={formData.currentStage}
-              onChange={onChange}
-              disabled={formDisabled}
-              required
-            >
-              <option value="">Select logistics stage</option>
-              {logisticsStageOptions.map((stage) => (
-                <option key={stage.key} value={stage.key}>
-                  {stage.displayName}
-                </option>
-              ))}
-            </select>
-          </label>
+          {!isInitialStateSystemManaged && (
+            <label>
+              Current Logistics Stage
+              <select
+                name="currentStage"
+                value={formData.currentStage}
+                onChange={onChange}
+                disabled={formDisabled}
+                required
+              >
+                <option value="">Select logistics stage</option>
+                {logisticsStageOptions.map((stage) => (
+                  <option key={stage.key} value={stage.key}>
+                    {stage.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <label>
             Stock Location
@@ -191,23 +196,25 @@ function ShipmentForm({
             />
           </label>
 
-          <label>
-            WIP Status
-            <select
-              name="workInProgressStatus"
-              value={formData.workInProgressStatus}
-              onChange={onChange}
-              disabled={formDisabled}
-              required
-            >
-              <option value="">Select WIP status</option>
-              {workInProgressStatusOptions.map((status) => (
-                <option key={status.key} value={status.key}>
-                  {status.displayName}
-                </option>
-              ))}
-            </select>
-          </label>
+          {!isInitialStateSystemManaged && (
+            <label>
+              WIP Status
+              <select
+                name="workInProgressStatus"
+                value={formData.workInProgressStatus}
+                onChange={onChange}
+                disabled={formDisabled}
+                required
+              >
+                <option value="">Select WIP status</option>
+                {workInProgressStatusOptions.map((status) => (
+                  <option key={status.key} value={status.key}>
+                    {status.displayName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <label>
             Shipment Document Reference

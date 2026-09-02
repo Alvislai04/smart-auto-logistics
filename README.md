@@ -37,14 +37,17 @@ The project currently includes:
   `party_profile_key`
 - Admin-managed database records for shipment dropdowns and simulation behavior
 - Supabase PostgreSQL Session Pooler configuration
-- Manufacturer shipment creation, listing, details, pre-pickup editing,
-  pre-transit milestones, and explicit transit start
+- Manufacturer shipment creation, listing, details, and pre-transit editing;
+  logistics providers control transit start and cancellation
 - Shipment creation route/API restricted to the manufacturer role
 - Shipment detail editing for admin and linked manufacturer accounts before
   pickup or in-transit tracking begins
 - Auto-generated unique shipment codes controlled by the backend
 - Backend-assigned immutable shipment start time based on the configured
   application timezone; users cannot select a past or future start date
+- Future-only estimated arrival validation in both the browser and backend API
+- System-assigned `MANUFACTURING` logistics stage and `NOT_STARTED` WIP state
+  for every newly created shipment
 - Database-backed Mercedes-Benz vehicle model dropdown for shipment creation
 - Database-backed manufacturer origin and dealership destination dropdowns using
   stable `model_code` and `party_key` values
@@ -59,8 +62,8 @@ The project currently includes:
 - System-managed IoT tracking updates with GPS, speed, and condition status
 - Database-backed random telemetry profiles for normal, fast, delayed, idle,
   route deviation, and sensor-warning movement
-- Automatic simulation session provisioning when the assigned manufacturer
-  starts transit, with a
+- Automatic simulation session provisioning when a logistics provider starts
+  transit, with a
   monitoring-only Simulation page for admin/logistics users
 - Immediate simulation shutdown after arrival, delivery, or cancellation so
   terminal shipment statuses cannot be replaced by later telemetry evaluation
@@ -351,10 +354,10 @@ Manufacturer creates shipment with generated shipment code
 -> Select Mercedes-Benz model
 -> Select registered manufacturer origin
 -> Select registered dealership destination
--> Manufacturer optionally marks ready for dispatch and pickup
--> Assigned manufacturer selects Start Transit
+-> Backend assigns Manufacturing stage and Not Started WIP status
+-> Logistics provider selects Start Transit or Cancel
 -> Backend system generates tracking updates
--> Logistics provider marks shipment arrived
+-> Backend simulation marks the shipment arrived at its destination
 -> Logistics workflow actions end at the dealership handoff
 -> Assigned dealership confirms delivery receipt
 -> Shipment becomes delivered
@@ -364,8 +367,8 @@ Manufacturer creates shipment with generated shipment code
 
 ```text
 Manufacturer creates shipment with route coordinates
--> Shipment remains stationary during pre-transit processing
--> Assigned manufacturer selects Start Transit
+-> Shipment remains stationary until logistics starts transit
+-> Logistics provider selects Start Transit
 -> Backend creates a system-owned simulation session
 -> Scheduler chooses random database-backed telemetry profile
 -> Scheduler advances GPS progress along the planned origin-to-destination route

@@ -1,7 +1,5 @@
 package com.fyp.autologistics.dto;
 
-import com.fyp.autologistics.enums.LogisticsStage;
-import com.fyp.autologistics.enums.WorkInProgressStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -24,14 +22,8 @@ public class CreateShipmentRequest {
     @NotNull(message = "Estimated arrival is required")
     private LocalDateTime estimatedArrival;
 
-    @NotNull(message = "Current logistics stage is required")
-    private LogisticsStage currentStage;
-
     @NotBlank(message = "Stock location is required")
     private String stockLocation;
-
-    @NotNull(message = "Work-in-progress status is required")
-    private WorkInProgressStatus workInProgressStatus;
 
     @NotBlank(message = "Responsible person is required")
     private String responsiblePerson;
@@ -90,28 +82,12 @@ public class CreateShipmentRequest {
         this.estimatedArrival = estimatedArrival;
     }
 
-    public LogisticsStage getCurrentStage() {
-        return currentStage;
-    }
-
-    public void setCurrentStage(LogisticsStage currentStage) {
-        this.currentStage = currentStage;
-    }
-
     public String getStockLocation() {
         return stockLocation;
     }
 
     public void setStockLocation(String stockLocation) {
         this.stockLocation = stockLocation;
-    }
-
-    public WorkInProgressStatus getWorkInProgressStatus() {
-        return workInProgressStatus;
-    }
-
-    public void setWorkInProgressStatus(WorkInProgressStatus workInProgressStatus) {
-        this.workInProgressStatus = workInProgressStatus;
     }
 
     public String getResponsiblePerson() {

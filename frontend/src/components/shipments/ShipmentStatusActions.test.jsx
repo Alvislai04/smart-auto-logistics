@@ -5,25 +5,71 @@ import { hasAvailableShipmentStatusActions } from "../../utils/shipmentStatusAct
 import ShipmentStatusActions from "./ShipmentStatusActions";
 
 describe("ShipmentStatusActions", () => {
-  it("allows logistics workflow arrival from in-transit status", async () => {
+  it("allows logistics providers to start or cancel a created shipment", async () => {
     const user = userEvent.setup();
     const onUpdateStatus = vi.fn();
 
     render(
       <ShipmentStatusActions
-        currentStatus="IN_TRANSIT"
+        currentStatus="CREATED"
         currentUserRole="LOGISTICS_PROVIDER"
         isUpdating={false}
         onUpdateStatus={onUpdateStatus}
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Mark Arrived" }));
+    await user.click(screen.getByRole("button", { name: "Start Transit" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
 
-    expect(onUpdateStatus).toHaveBeenCalledWith("ARRIVED");
+    expect(onUpdateStatus).toHaveBeenNthCalledWith(1, "IN_TRANSIT");
+    expect(onUpdateStatus).toHaveBeenNthCalledWith(2, "CANCELLED");
+    expect(
+      screen.queryByRole("button", { name: "Mark Arrived" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("does not expose any logistics action after arrival", () => {
+  it("does not expose workflow actions to manufacturers", () => {
+    expect(hasAvailableShipmentStatusActions("CREATED", "MANUFACTURER")).toBe(
+      false,
+    );
+
+    render(
+      <ShipmentStatusActions
+        currentStatus="CREATED"
+        currentUserRole="MANUFACTURER"
+        isUpdating={false}
+        onUpdateStatus={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Start Transit" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Cancel" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("allows logistics cancellation during transit without manual arrival", () => {
+    render(
+      <ShipmentStatusActions
+        currentStatus="IN_TRANSIT"
+        currentUserRole="LOGISTICS_PROVIDER"
+        isUpdating={false}
+        onUpdateStatus={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Mark Arrived" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Start Transit" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not expose any logistics action after system arrival", () => {
     expect(
       hasAvailableShipmentStatusActions("ARRIVED", "LOGISTICS_PROVIDER"),
     ).toBe(false);
@@ -37,60 +83,6 @@ describe("ShipmentStatusActions", () => {
       />,
     );
 
-    expect(
-      screen.queryByRole("button", { name: "Mark Delivered" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Cancel" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Confirm Receipt" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("allows only manufacturers to start transit", async () => {
-    const user = userEvent.setup();
-    const onUpdateStatus = vi.fn();
-    const { rerender } = render(
-      <ShipmentStatusActions
-        currentStatus="CREATED"
-        currentUserRole="LOGISTICS_PROVIDER"
-        isUpdating={false}
-        onUpdateStatus={onUpdateStatus}
-      />,
-    );
-
-    expect(
-      screen.queryByRole("button", { name: "Start Transit" }),
-    ).not.toBeInTheDocument();
-
-    rerender(
-      <ShipmentStatusActions
-        currentStatus="CREATED"
-        currentUserRole="MANUFACTURER"
-        isUpdating={false}
-        onUpdateStatus={onUpdateStatus}
-      />,
-    );
-
-    await user.click(screen.getByRole("button", { name: "Start Transit" }));
-    expect(onUpdateStatus).toHaveBeenCalledWith("IN_TRANSIT");
-  });
-
-  it("limits logistics providers to arrival and cancellation actions", () => {
-    render(
-      <ShipmentStatusActions
-        currentStatus="IN_TRANSIT"
-        currentUserRole="LOGISTICS_PROVIDER"
-        isUpdating={false}
-        onUpdateStatus={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByRole("button", { name: "Mark Arrived" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeVisible();
-    expect(
-      screen.queryByRole("button", { name: "Start Transit" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 });

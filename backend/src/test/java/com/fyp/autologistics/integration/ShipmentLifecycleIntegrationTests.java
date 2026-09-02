@@ -1,12 +1,15 @@
 package com.fyp.autologistics.integration;
 
 import com.fyp.autologistics.entity.AppUser;
+import com.fyp.autologistics.entity.Shipment;
 import com.fyp.autologistics.entity.ShipmentEvent;
 import com.fyp.autologistics.entity.ShipmentPartyProfile;
 import com.fyp.autologistics.entity.VehicleModel;
 import com.fyp.autologistics.enums.AlertType;
+import com.fyp.autologistics.enums.LogisticsStage;
 import com.fyp.autologistics.enums.ShipmentEventSourceType;
 import com.fyp.autologistics.enums.ShipmentEventType;
+import com.fyp.autologistics.enums.ShipmentStatus;
 import com.fyp.autologistics.enums.UserRole;
 import com.fyp.autologistics.repository.AdminNotificationRepository;
 import com.fyp.autologistics.repository.AlertRepository;
@@ -14,7 +17,9 @@ import com.fyp.autologistics.repository.AppUserRepository;
 import com.fyp.autologistics.repository.BlockchainRecordRepository;
 import com.fyp.autologistics.repository.ShipmentEventRepository;
 import com.fyp.autologistics.repository.ShipmentPartyProfileRepository;
+import com.fyp.autologistics.repository.ShipmentRepository;
 import com.fyp.autologistics.repository.VehicleModelRepository;
+import com.fyp.autologistics.service.ShipmentService;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,6 +71,12 @@ class ShipmentLifecycleIntegrationTests {
     private ShipmentEventRepository shipmentEventRepository;
 
     @Autowired
+    private ShipmentRepository shipmentRepository;
+
+    @Autowired
+    private ShipmentService shipmentService;
+
+    @Autowired
     private AlertRepository alertRepository;
 
     @Autowired
@@ -112,6 +123,8 @@ class ShipmentLifecycleIntegrationTests {
                                 """.formatted(estimatedArrival)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CREATED"))
+                .andExpect(jsonPath("$.currentStage").value("MANUFACTURING"))
+                .andExpect(jsonPath("$.workInProgressStatus").value("NOT_STARTED"))
                 .andExpect(jsonPath("$.manufacturerKey").value("MFG-INTEGRATION"))
                 .andReturn()
                 .getResponse()
@@ -134,24 +147,33 @@ class ShipmentLifecycleIntegrationTests {
                 .andExpect(jsonPath("$.shipmentCode").value(shipmentCode));
 
         mockMvc.perform(put("/api/shipments/{shipmentId}/status", shipmentId)
-                        .queryParam("status", "READY_FOR_DISPATCH")
+                        .queryParam("status", "IN_TRANSIT")
                         .header(HttpHeaders.AUTHORIZATION, bearer(manufacturerToken)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("READY_FOR_DISPATCH"))
-                .andExpect(jsonPath("$.currentStage").value("READY_FOR_DISPATCH"));
-
-        updateStatus(shipmentId, manufacturerToken, "PICKED_UP");
+                .andExpect(status().isForbidden());
 
         mockMvc.perform(put("/api/shipments/{shipmentId}/status", shipmentId)
                         .queryParam("status", "IN_TRANSIT")
                         .header(HttpHeaders.AUTHORIZATION, bearer(logisticsToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("IN_TRANSIT"))
+                .andExpect(jsonPath("$.currentStage").value("IN_TRANSIT"));
+
+        mockMvc.perform(put("/api/shipments/{shipmentId}/status", shipmentId)
+                        .queryParam("status", "ARRIVED")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(logisticsToken)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
-                        "Logistics providers can only mark shipments arrived or cancel them."
+                        "Logistics providers can only start transit or cancel shipments."
                 ));
 
-        updateStatus(shipmentId, manufacturerToken, "IN_TRANSIT");
-        updateStatusAsLogistics(shipmentId, logisticsToken, "ARRIVED");
+        Shipment shipment = shipmentRepository.findById(shipmentId).orElseThrow();
+        shipmentService.updateSystemStatus(
+                shipment,
+                ShipmentStatus.ARRIVED,
+                LogisticsStage.ARRIVED_AT_DEALERSHIP,
+                ShipmentEventSourceType.IOT_SIMULATION,
+                "System simulation detected arrival at the dealership."
+        );
 
         mockMvc.perform(put("/api/shipments/{shipmentId}/status", shipmentId)
                         .queryParam("status", "CANCELLED")
@@ -203,10 +225,10 @@ class ShipmentLifecycleIntegrationTests {
                 );
         assertThat(history)
                 .filteredOn(event -> event.getEventType() == ShipmentEventType.STATUS_CHANGED
-                        && "READY_FOR_DISPATCH".equals(event.getNewStatus()))
+                        && "IN_TRANSIT".equals(event.getNewStatus()))
                 .singleElement()
                 .satisfies(event -> {
-                    assertThat(event.getActorEmail()).isEqualTo(MANUFACTURER_EMAIL);
+                    assertThat(event.getActorEmail()).isEqualTo(LOGISTICS_EMAIL);
                     assertThat(event.getSourceType())
                             .isEqualTo(ShipmentEventSourceType.USER_ACTION);
                 });
@@ -285,30 +307,6 @@ class ShipmentLifecycleIntegrationTests {
                 UserRole.DEALERSHIP,
                 "DLR-INTEGRATION"
         ));
-    }
-
-    private void updateStatusAsLogistics(
-            long shipmentId,
-            String logisticsToken,
-            String nextStatus
-    ) throws Exception {
-        mockMvc.perform(put("/api/shipments/{shipmentId}/status", shipmentId)
-                        .queryParam("status", nextStatus)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(logisticsToken)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value(nextStatus));
-    }
-
-    private void updateStatus(
-            long shipmentId,
-            String token,
-            String nextStatus
-    ) throws Exception {
-        mockMvc.perform(put("/api/shipments/{shipmentId}/status", shipmentId)
-                        .queryParam("status", nextStatus)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value(nextStatus));
     }
 
     private ShipmentPartyProfile buildParty(

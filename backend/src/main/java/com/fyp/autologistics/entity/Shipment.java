@@ -94,7 +94,7 @@ public class Shipment {
         }
 
         if (this.workInProgressStatus == null) {
-            this.workInProgressStatus = WorkInProgressStatus.NOT_APPLICABLE;
+            this.workInProgressStatus = WorkInProgressStatus.NOT_STARTED;
         }
     }
 

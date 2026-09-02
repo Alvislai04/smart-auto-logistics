@@ -24,7 +24,7 @@ export const initialShipmentFormData = {
   estimatedDeparture: "",
   currentStage: "MANUFACTURING",
   stockLocation: "",
-  workInProgressStatus: "NOT_APPLICABLE",
+  workInProgressStatus: "NOT_STARTED",
   responsiblePerson: "",
   responsibleContact: "",
   customerName: "",
@@ -179,9 +179,29 @@ export function buildShipmentPayload(formData) {
   };
 }
 
+export function buildCreateShipmentPayload(formData) {
+  const payload = buildShipmentPayload(formData);
+  delete payload.currentStage;
+  delete payload.workInProgressStatus;
+  return payload;
+}
+
+export function minimumFutureDateTimeLocalValue(now = new Date()) {
+  const nextMinute = new Date(
+    Math.floor(now.getTime() / 60_000) * 60_000 + 60_000,
+  );
+  const timezoneOffsetMs = nextMinute.getTimezoneOffset() * 60_000;
+  return new Date(nextMinute.getTime() - timezoneOffsetMs)
+    .toISOString()
+    .slice(0, 16);
+}
+
 export function validateShipmentForm(
   formData,
-  { automaticDeparture = false } = {},
+  {
+    automaticDeparture = false,
+    systemManagedInitialState = false,
+  } = {},
 ) {
   const requiredFields = [
     "manufacturerKey",
@@ -189,15 +209,17 @@ export function validateShipmentForm(
     "vehicleVin",
     "vehicleModelKey",
     "estimatedArrival",
-    "currentStage",
     "stockLocation",
-    "workInProgressStatus",
     "responsiblePerson",
     "responsibleContact",
     "customerName",
     "customerContact",
     "customerAddress",
   ];
+
+  if (!systemManagedInitialState) {
+    requiredFields.push("currentStage", "workInProgressStatus");
+  }
 
   const hasEmptyField = requiredFields.some(
     (fieldName) => !String(formData[fieldName] ?? "").trim(),
@@ -221,7 +243,9 @@ export function validateShipmentForm(
   const estimatedArrival = new Date(formData.estimatedArrival);
 
   if (estimatedArrival <= estimatedDeparture) {
-    return "Estimated arrival must be after estimated departure.";
+    return automaticDeparture
+      ? "Estimated arrival must be in the future."
+      : "Estimated arrival must be after estimated departure.";
   }
 
   return "";

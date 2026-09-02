@@ -17,6 +17,7 @@ import com.fyp.autologistics.enums.ShipmentEventSourceType;
 import com.fyp.autologistics.enums.ShipmentEventType;
 import com.fyp.autologistics.enums.ShipmentStatus;
 import com.fyp.autologistics.enums.UserRole;
+import com.fyp.autologistics.enums.WorkInProgressStatus;
 import com.fyp.autologistics.exception.BadRequestException;
 import com.fyp.autologistics.exception.ResourceNotFoundException;
 import com.fyp.autologistics.repository.ShipmentEventRepository;
@@ -45,6 +46,9 @@ public class ShipmentService {
 
     private static final int DEFAULT_PAGE_SIZE = 10;
     private static final int MAX_PAGE_SIZE = 50;
+    private static final LogisticsStage INITIAL_LOGISTICS_STAGE = LogisticsStage.MANUFACTURING;
+    private static final WorkInProgressStatus INITIAL_WIP_STATUS =
+            WorkInProgressStatus.NOT_STARTED;
     private static final DateTimeFormatter SHIPMENT_CODE_DATE_FORMATTER =
             DateTimeFormatter.BASIC_ISO_DATE;
 
@@ -99,6 +103,7 @@ public class ShipmentService {
     public ShipmentResponse createShipment(CreateShipmentRequest request, String actorEmail) {
         AppUser actor = authenticatedUserService.getAuthenticatedUser(actorEmail);
         LocalDateTime estimatedDeparture = LocalDateTime.now(applicationClock).withNano(0);
+        validateEstimatedArrivalIsFuture(request.getEstimatedArrival());
         validateShipmentSchedule(estimatedDeparture, request.getEstimatedArrival());
         VehicleModel vehicleModel = findActiveVehicleModel(request.getVehicleModelKey());
 
@@ -128,9 +133,9 @@ public class ShipmentService {
         shipment.setDealershipName(resolvePartyName(dealership));
         shipment.setEstimatedArrival(request.getEstimatedArrival());
         shipment.setEstimatedDeparture(estimatedDeparture);
-        shipment.setCurrentStage(request.getCurrentStage());
+        shipment.setCurrentStage(INITIAL_LOGISTICS_STAGE);
         shipment.setStockLocation(normalizeText(request.getStockLocation()));
-        shipment.setWorkInProgressStatus(request.getWorkInProgressStatus());
+        shipment.setWorkInProgressStatus(INITIAL_WIP_STATUS);
         shipment.setResponsiblePerson(normalizeText(request.getResponsiblePerson()));
         shipment.setResponsibleContact(normalizeText(request.getResponsibleContact()));
         shipment.setCustomerName(normalizeText(request.getCustomerName()));
@@ -194,6 +199,7 @@ public class ShipmentService {
         AppUser actor = authenticatedUserService.getAuthenticatedUser(actorEmail);
 
         validateShipmentEditAllowed(shipment, actor, request.getManufacturerKey());
+        validateEstimatedArrivalIsFuture(request.getEstimatedArrival());
         validateShipmentSchedule(shipment.getEstimatedDeparture(), request.getEstimatedArrival());
 
         VehicleModel vehicleModel = findActiveVehicleModel(request.getVehicleModelKey());
@@ -341,7 +347,7 @@ public class ShipmentService {
         }
 
         validateStatusTransition(previousStatus, status);
-        validateManualStatusUpdateAllowed(shipment, actor, status);
+        validateManualStatusUpdateAllowed(actor, status);
 
         shipment.setStatus(status);
         shipment.setCurrentStage(resolveStageForStatus(status, shipment.getCurrentStage()));
@@ -493,8 +499,7 @@ public class ShipmentService {
         }
 
         boolean isValidTransition = switch (currentStatus) {
-            case CREATED -> nextStatus == ShipmentStatus.READY_FOR_DISPATCH
-                    || nextStatus == ShipmentStatus.IN_TRANSIT
+            case CREATED -> nextStatus == ShipmentStatus.IN_TRANSIT
                     || nextStatus == ShipmentStatus.CANCELLED;
 
             case READY_FOR_DISPATCH -> nextStatus == ShipmentStatus.PICKED_UP
@@ -527,11 +532,7 @@ public class ShipmentService {
         }
     }
 
-    private void validateManualStatusUpdateAllowed(
-            Shipment shipment,
-            AppUser actor,
-            ShipmentStatus nextStatus
-    ) {
+    private void validateManualStatusUpdateAllowed(AppUser actor, ShipmentStatus nextStatus) {
         if (nextStatus == ShipmentStatus.DELIVERED) {
             throw new BadRequestException(
                     "A shipment becomes delivered only when its assigned dealership confirms receipt."
@@ -539,17 +540,9 @@ public class ShipmentService {
         }
 
         boolean actionAllowed = switch (actor.getRole()) {
-            case MANUFACTURER -> {
-                validateManufacturerStatusOwnership(shipment, actor);
-                yield nextStatus == ShipmentStatus.READY_FOR_DISPATCH
-                        || nextStatus == ShipmentStatus.PICKED_UP
-                        || nextStatus == ShipmentStatus.IN_TRANSIT
-                        || nextStatus == ShipmentStatus.CANCELLED;
-            }
-            case LOGISTICS_PROVIDER -> nextStatus == ShipmentStatus.ARRIVED
+            case LOGISTICS_PROVIDER -> nextStatus == ShipmentStatus.IN_TRANSIT
                     || nextStatus == ShipmentStatus.CANCELLED;
-            case ADMIN -> nextStatus == ShipmentStatus.CANCELLED;
-            case DEALERSHIP -> false;
+            case ADMIN, MANUFACTURER, DEALERSHIP -> false;
         };
 
         if (!actionAllowed) {
@@ -557,27 +550,11 @@ public class ShipmentService {
         }
     }
 
-    private void validateManufacturerStatusOwnership(Shipment shipment, AppUser actor) {
-        String actorPartyKey = normalizeText(actor.getPartyProfileKey());
-
-        if (actorPartyKey == null) {
-            throw new BadRequestException(
-                    "Your manufacturer account is not linked to a shipment party profile."
-            );
-        }
-
-        if (!actorPartyKey.equals(normalizeText(shipment.getManufacturerKey()))) {
-            throw new BadRequestException(
-                    "Manufacturers can only update shipments linked to their own company profile."
-            );
-        }
-    }
-
     private String resolveStatusPermissionMessage(UserRole role) {
         return switch (role) {
-            case MANUFACTURER -> "Manufacturers can manage pre-transit milestones and start transit.";
-            case LOGISTICS_PROVIDER -> "Logistics providers can only mark shipments arrived or cancel them.";
-            case ADMIN -> "Administrators can only cancel shipments from the workflow actions.";
+            case MANUFACTURER -> "Manufacturers create shipment details; logistics providers start or cancel transit.";
+            case LOGISTICS_PROVIDER -> "Logistics providers can only start transit or cancel shipments.";
+            case ADMIN -> "Administrators cannot change shipment workflow status.";
             case DEALERSHIP -> "Dealerships complete delivery by confirming receipt.";
         };
     }
@@ -652,6 +629,17 @@ public class ShipmentService {
 
         if (!estimatedArrival.isAfter(estimatedDeparture)) {
             throw new BadRequestException("Estimated arrival must be after estimated departure.");
+        }
+    }
+
+    private void validateEstimatedArrivalIsFuture(LocalDateTime estimatedArrival) {
+        if (estimatedArrival == null) {
+            throw new BadRequestException("Estimated arrival is required.");
+        }
+
+        LocalDateTime now = LocalDateTime.now(applicationClock).withNano(0);
+        if (!estimatedArrival.isAfter(now)) {
+            throw new BadRequestException("Estimated arrival must be in the future.");
         }
     }
 

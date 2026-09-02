@@ -54,9 +54,11 @@ Legend:
 - [x] Prevent logistics/admin status actions from bypassing dealership receipt confirmation
 - [x] Restrict receipt confirmation to the dealership assigned by `dealership_key`
 - [x] Set `DELIVERED` only after assigned dealership receipt confirmation
-- [x] Restrict transit start to the shipment's assigned manufacturer
-- [x] Restrict logistics workflow actions to `ARRIVED` and `CANCELLED`
-- [x] Keep IoT simulation idle until the manufacturer starts transit
+- [x] Assign `MANUFACTURING` stage and `NOT_STARTED` WIP state during creation
+- [x] Reject past estimated arrival values in the browser and backend API
+- [x] Restrict manual status actions to logistics transit start and cancellation
+- [x] Keep IoT simulation idle until the logistics provider starts transit
+- [x] Reserve `ARRIVED` for automatic simulation arrival detection
 - [x] Prevent updates after `DELIVERED`
 - [x] Prevent updates after `CANCELLED`
 
@@ -364,12 +366,9 @@ frontend/src/
 Current workflow buttons:
 
 ```text
-Mark Ready (assigned manufacturer)
-Mark Picked Up (assigned manufacturer)
-Start Transit (assigned manufacturer; starts IoT movement)
-Mark Arrived (logistics provider)
+Start Transit (logistics provider; starts IoT movement)
+Cancel (logistics provider; unavailable after arrival)
 Confirm Receipt (assigned dealership; completes delivery)
-Cancel (admin, assigned manufacturer, or logistics provider)
 ```
 
 ---
@@ -494,7 +493,7 @@ Implemented access:
 | -------------------------- | ----: | -----------: | -----------------: | ---------: |
 | Dashboard                  |   Yes |          Yes |                Yes |        Yes |
 | Create Shipment            |    No |          Yes |                 No |         No |
-| Update Shipment Status     | Cancel | Own pre-transit/start | Arrive/cancel | Receipt only |
+| Update Shipment Status     |    No |           No |       Start/cancel | Receipt only |
 | Confirm Delivery Receipt   |    No |           No |                 No | Assigned only |
 | Simulate / Tracking Update | Monitor |      System only |            Monitor |         No |
 | View Alerts                |   Yes |          Yes |                Yes |        Yes |
@@ -855,15 +854,13 @@ PUT /api/admin/notifications/{notificationId}/read
 ```text
 Create Shipment
 ↓
-Mark Ready (assigned manufacturer, optional)
+System assigns Manufacturing / Not Started
 ↓
-Mark Picked Up (assigned manufacturer, optional)
-↓
-Start Transit (assigned manufacturer)
+Start Transit (logistics provider)
 ↓
 System simulates tracking updates
 ↓
-Mark Arrived (logistics provider)
+System detects arrival
 ↓
 Confirm Receipt (assigned dealership)
 ↓

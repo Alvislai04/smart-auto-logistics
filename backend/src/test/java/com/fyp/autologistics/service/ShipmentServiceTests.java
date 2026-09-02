@@ -1,6 +1,7 @@
 package com.fyp.autologistics.service;
 
 import com.fyp.autologistics.dto.ConfirmDeliveryReceiptRequest;
+import com.fyp.autologistics.dto.CreateShipmentRequest;
 import com.fyp.autologistics.dto.ShipmentResponse;
 import com.fyp.autologistics.entity.AppUser;
 import com.fyp.autologistics.entity.Shipment;
@@ -23,6 +24,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Optional;
 
@@ -65,16 +67,43 @@ class ShipmentServiceTests {
     );
 
     @Test
+    void createShipmentRejectsPastEstimatedArrival() {
+        CreateShipmentRequest request = new CreateShipmentRequest();
+        request.setEstimatedArrival(LocalDateTime.now(applicationClock).minusMinutes(1));
+        when(authenticatedUserService.getAuthenticatedUser("manufacturer@example.com"))
+                .thenReturn(buildActor(
+                        "Manufacturer Operator",
+                        "manufacturer@example.com",
+                        UserRole.MANUFACTURER,
+                        "MFG-001"
+                ));
+
+        assertThatThrownBy(() -> shipmentService.createShipment(
+                request,
+                "manufacturer@example.com"
+        ))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Estimated arrival must be in the future.");
+
+        verify(shipmentRepository, never()).save(any(Shipment.class));
+    }
+
+    @Test
     void unchangedManualStatusDoesNotCreateDuplicateHistoryOrAlertEvent() {
         Shipment shipment = buildShipment(ShipmentStatus.IN_TRANSIT, LogisticsStage.IN_TRANSIT);
         when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
-        when(authenticatedUserService.getAuthenticatedUser("admin@example.com"))
-                .thenReturn(buildActor());
+        when(authenticatedUserService.getAuthenticatedUser("logistics@example.com"))
+                .thenReturn(buildActor(
+                        "Logistics Operator",
+                        "logistics@example.com",
+                        UserRole.LOGISTICS_PROVIDER,
+                        null
+                ));
 
         ShipmentResponse response = shipmentService.updateShipmentStatus(
                 42L,
                 ShipmentStatus.IN_TRANSIT,
-                "admin@example.com"
+                "logistics@example.com"
         );
 
         assertThat(response.getStatus()).isEqualTo(ShipmentStatus.IN_TRANSIT);
@@ -85,16 +114,15 @@ class ShipmentServiceTests {
 
     @Test
     void validManualTransitionCreatesAttributedHistoryAndPublishesAfterChange() {
-        Shipment shipment = buildShipment(ShipmentStatus.CREATED, LogisticsStage.STOCK_YARD);
-        shipment.setManufacturerKey("MFG-001");
+        Shipment shipment = buildShipment(ShipmentStatus.CREATED, LogisticsStage.MANUFACTURING);
         AppUser actor = buildActor(
-                "Manufacturer Operator",
-                "manufacturer@example.com",
-                UserRole.MANUFACTURER,
-                "MFG-001"
+                "Logistics Operator",
+                "logistics@example.com",
+                UserRole.LOGISTICS_PROVIDER,
+                null
         );
         when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
-        when(authenticatedUserService.getAuthenticatedUser("manufacturer@example.com"))
+        when(authenticatedUserService.getAuthenticatedUser("logistics@example.com"))
                 .thenReturn(actor);
         when(shipmentRepository.save(shipment)).thenReturn(shipment);
         when(shipmentEventRepository.save(any(ShipmentEvent.class)))
@@ -102,19 +130,19 @@ class ShipmentServiceTests {
 
         ShipmentResponse response = shipmentService.updateShipmentStatus(
                 42L,
-                ShipmentStatus.READY_FOR_DISPATCH,
-                "manufacturer@example.com"
+                ShipmentStatus.IN_TRANSIT,
+                "logistics@example.com"
         );
 
-        assertThat(response.getStatus()).isEqualTo(ShipmentStatus.READY_FOR_DISPATCH);
-        assertThat(response.getCurrentStage()).isEqualTo(LogisticsStage.READY_FOR_DISPATCH);
+        assertThat(response.getStatus()).isEqualTo(ShipmentStatus.IN_TRANSIT);
+        assertThat(response.getCurrentStage()).isEqualTo(LogisticsStage.IN_TRANSIT);
 
         ArgumentCaptor<ShipmentEvent> historyCaptor = ArgumentCaptor.forClass(ShipmentEvent.class);
         verify(shipmentEventRepository).save(historyCaptor.capture());
         ShipmentEvent history = historyCaptor.getValue();
         assertThat(history.getEventType()).isEqualTo(ShipmentEventType.STATUS_CHANGED);
-        assertThat(history.getActorEmail()).isEqualTo("manufacturer@example.com");
-        assertThat(history.getActorRole()).isEqualTo(UserRole.MANUFACTURER);
+        assertThat(history.getActorEmail()).isEqualTo("logistics@example.com");
+        assertThat(history.getActorRole()).isEqualTo(UserRole.LOGISTICS_PROVIDER);
         assertThat(history.getSourceType()).isEqualTo(ShipmentEventSourceType.USER_ACTION);
         verify(blockchainRecordService).recordShipmentEventAutomatically(history);
 
@@ -123,7 +151,7 @@ class ShipmentServiceTests {
         assertThat(eventCaptor.getValue()).isEqualTo(new ShipmentStatusChangedEvent(
                 42L,
                 ShipmentStatus.CREATED,
-                ShipmentStatus.READY_FOR_DISPATCH,
+                ShipmentStatus.IN_TRANSIT,
                 ShipmentEventSourceType.USER_ACTION
         ));
     }
@@ -204,9 +232,8 @@ class ShipmentServiceTests {
     }
 
     @Test
-    void assignedManufacturerCanStartTransitDirectlyFromCreated() {
-        Shipment shipment = buildShipment(ShipmentStatus.CREATED, LogisticsStage.STOCK_YARD);
-        shipment.setManufacturerKey("MFG-001");
+    void manufacturerCannotStartTransit() {
+        Shipment shipment = buildShipment(ShipmentStatus.CREATED, LogisticsStage.MANUFACTURING);
         AppUser manufacturer = buildActor(
                 "Manufacturer Operator",
                 "manufacturer@example.com",
@@ -217,6 +244,29 @@ class ShipmentServiceTests {
         when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
         when(authenticatedUserService.getAuthenticatedUser("manufacturer@example.com"))
                 .thenReturn(manufacturer);
+        assertThatThrownBy(() -> shipmentService.updateShipmentStatus(
+                42L,
+                ShipmentStatus.IN_TRANSIT,
+                "manufacturer@example.com"
+        ))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("logistics providers start or cancel transit");
+
+        assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.CREATED);
+        verify(shipmentRepository, never()).save(any(Shipment.class));
+    }
+
+    @Test
+    void logisticsProviderCanStartTransit() {
+        Shipment shipment = buildShipment(ShipmentStatus.CREATED, LogisticsStage.MANUFACTURING);
+        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(authenticatedUserService.getAuthenticatedUser("logistics@example.com"))
+                .thenReturn(buildActor(
+                        "Logistics Operator",
+                        "logistics@example.com",
+                        UserRole.LOGISTICS_PROVIDER,
+                        "LSP-001"
+                ));
         when(shipmentRepository.save(shipment)).thenReturn(shipment);
         when(shipmentEventRepository.save(any(ShipmentEvent.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -224,63 +274,32 @@ class ShipmentServiceTests {
         ShipmentResponse response = shipmentService.updateShipmentStatus(
                 42L,
                 ShipmentStatus.IN_TRANSIT,
-                "manufacturer@example.com"
+                "logistics@example.com"
         );
 
         assertThat(response.getStatus()).isEqualTo(ShipmentStatus.IN_TRANSIT);
         assertThat(response.getCurrentStage()).isEqualTo(LogisticsStage.IN_TRANSIT);
-        verify(applicationEventPublisher).publishEvent(new ShipmentStatusChangedEvent(
-                42L,
-                ShipmentStatus.CREATED,
-                ShipmentStatus.IN_TRANSIT,
-                ShipmentEventSourceType.USER_ACTION
-        ));
     }
 
     @Test
-    void logisticsProviderCannotStartTransit() {
-        Shipment shipment = buildShipment(ShipmentStatus.PICKED_UP, LogisticsStage.STOCK_YARD);
+    void manufacturerCannotCancelShipment() {
+        Shipment shipment = buildShipment(ShipmentStatus.CREATED, LogisticsStage.MANUFACTURING);
         when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
-        when(authenticatedUserService.getAuthenticatedUser("logistics@example.com"))
+        when(authenticatedUserService.getAuthenticatedUser("manufacturer@example.com"))
                 .thenReturn(buildActor(
-                        "Logistics Operator",
-                        "logistics@example.com",
-                        UserRole.LOGISTICS_PROVIDER,
-                        null
-                ));
-
-        assertThatThrownBy(() -> shipmentService.updateShipmentStatus(
-                42L,
-                ShipmentStatus.IN_TRANSIT,
-                "logistics@example.com"
-        ))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("only mark shipments arrived or cancel");
-
-        assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.PICKED_UP);
-        verify(shipmentRepository, never()).save(any(Shipment.class));
-    }
-
-    @Test
-    void manufacturerCannotStartAnotherCompanyShipment() {
-        Shipment shipment = buildShipment(ShipmentStatus.CREATED, LogisticsStage.STOCK_YARD);
-        shipment.setManufacturerKey("MFG-001");
-        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
-        when(authenticatedUserService.getAuthenticatedUser("other-mfg@example.com"))
-                .thenReturn(buildActor(
-                        "Other Manufacturer",
-                        "other-mfg@example.com",
+                        "Manufacturer Operator",
+                        "manufacturer@example.com",
                         UserRole.MANUFACTURER,
-                        "MFG-002"
+                        "MFG-001"
                 ));
 
         assertThatThrownBy(() -> shipmentService.updateShipmentStatus(
                 42L,
-                ShipmentStatus.IN_TRANSIT,
-                "other-mfg@example.com"
+                ShipmentStatus.CANCELLED,
+                "manufacturer@example.com"
         ))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("own company profile");
+                .hasMessageContaining("logistics providers start or cancel transit");
 
         verify(shipmentRepository, never()).save(any(Shipment.class));
     }

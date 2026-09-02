@@ -13,6 +13,7 @@ import {
   initialShipmentFormData,
   isShipmentEditableForUser,
   mapShipmentToFormData,
+  minimumFutureDateTimeLocalValue,
   normalizeShipmentFormOptions,
   validateShipmentForm,
 } from "../utils/shipmentFormUtils";
@@ -192,6 +193,7 @@ function EditShipmentPage() {
         formOptions={formOptions}
         shipmentCode={shipment.shipmentCode}
         isReadOnly={!canSubmit}
+        minimumEstimatedArrival={minimumFutureDateTimeLocalValue()}
         isLoadingOptions={false}
         isSubmitting={isSubmitting}
         submitButtonLabel="Save Shipment"

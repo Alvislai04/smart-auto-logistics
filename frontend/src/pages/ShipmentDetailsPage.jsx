@@ -207,10 +207,7 @@ function ShipmentDetailsPage() {
 
   const canConfirmReceipt = canUserConfirmShipmentReceipt(shipment, currentUser);
   const canEditShipment = isShipmentEditableForUser(shipment, currentUser);
-  const hasShipmentWorkflowAccess =
-    ["ADMIN", "LOGISTICS_PROVIDER"].includes(currentUserRole) ||
-    (currentUserRole === "MANUFACTURER" &&
-      currentUser?.partyProfileKey === shipment.manufacturerKey);
+  const hasShipmentWorkflowAccess = currentUserRole === "LOGISTICS_PROVIDER";
   const canManageShipmentWorkflow =
     hasShipmentWorkflowAccess &&
     hasAvailableShipmentStatusActions(shipment.status, currentUserRole);
