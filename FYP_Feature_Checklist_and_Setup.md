@@ -55,9 +55,11 @@ Legend:
 - [x] Set `DELIVERED` only after assigned dealership receipt confirmation
 - [x] Assign `MANUFACTURING` stage and `NOT_STARTED` WIP state during creation
 - [x] Reject past estimated arrival values in the browser and backend API
-- [x] Restrict manual status actions to logistics transit start and cancellation
+- [x] Restrict manual status actions to logistics transit start, arrival confirmation,
+  and cancellation
 - [x] Keep IoT simulation idle until the logistics provider starts transit
-- [x] Reserve `ARRIVED` for automatic simulation arrival detection
+- [x] Stop simulation at the destination and reserve `ARRIVED` for logistics handoff
+  confirmation
 - [x] Prevent updates after `DELIVERED`
 - [x] Prevent updates after `CANCELLED`
 
@@ -97,7 +99,7 @@ CANCELLED
 - [x] Detect idle vehicle
 - [x] Update shipment status to `DELAYED` when delayed/idle condition is detected
 - [x] Update shipment status back to `IN_TRANSIT` when movement becomes normal
-- [x] Stop active simulation immediately after arrival, delivery, or cancellation
+- [x] Stop active simulation at the destination, arrival, delivery, or cancellation
 - [x] Restrict delay monitoring to `IN_TRANSIT` and `DELAYED` shipments
 - [x] Prevent historical telemetry from reverting `ARRIVED` to `DELAYED`
 - [x] Lock logistics workflow actions after `ARRIVED`; dealership receipt is the
@@ -374,6 +376,7 @@ Current workflow buttons:
 
 ```text
 Start Transit (logistics provider; starts IoT movement)
+Mark Arrived (logistics provider; enables assigned dealership receipt confirmation)
 Cancel (logistics provider; unavailable after arrival)
 Confirm Receipt (assigned dealership; completes delivery)
 ```
@@ -502,7 +505,7 @@ Implemented access:
 | -------------------------- | ----: | -----------: | -----------------: | ---------: |
 | Dashboard                  |   Yes |          Yes |                Yes |        Yes |
 | Create Shipment            |    No |          Yes |                 No |         No |
-| Update Shipment Status     |    No |           No |       Start/cancel | Receipt only |
+| Update Shipment Status     |    No |           No | Start/arrive/cancel | Receipt only |
 | Confirm Delivery Receipt   |    No |           No |                 No | Assigned only |
 | Simulate / Tracking Update | Monitor |      System only |            Monitor |         No |
 | View Alerts                |   Yes |          Yes |                Yes |        Yes |

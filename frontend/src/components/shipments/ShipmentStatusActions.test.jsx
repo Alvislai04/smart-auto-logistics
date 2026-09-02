@@ -50,26 +50,46 @@ describe("ShipmentStatusActions", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("allows logistics cancellation during transit without manual arrival", () => {
+  it("allows logistics providers to confirm arrival or cancel during transit", async () => {
+    const user = userEvent.setup();
+    const onUpdateStatus = vi.fn();
+
     render(
       <ShipmentStatusActions
         currentStatus="IN_TRANSIT"
+        currentUserRole="LOGISTICS_PROVIDER"
+        isUpdating={false}
+        onUpdateStatus={onUpdateStatus}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Mark Arrived" }));
+
+    expect(onUpdateStatus).toHaveBeenCalledWith("ARRIVED");
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Start Transit" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("allows a delayed shipment to be marked as arrived", () => {
+    expect(
+      hasAvailableShipmentStatusActions("DELAYED", "LOGISTICS_PROVIDER"),
+    ).toBe(true);
+
+    render(
+      <ShipmentStatusActions
+        currentStatus="DELAYED"
         currentUserRole="LOGISTICS_PROVIDER"
         isUpdating={false}
         onUpdateStatus={vi.fn()}
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Cancel" })).toBeVisible();
-    expect(
-      screen.queryByRole("button", { name: "Mark Arrived" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Start Transit" }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mark Arrived" })).toBeVisible();
   });
 
-  it("does not expose any logistics action after system arrival", () => {
+  it("does not expose any logistics action after confirmed arrival", () => {
     expect(
       hasAvailableShipmentStatusActions("ARRIVED", "LOGISTICS_PROVIDER"),
     ).toBe(false);

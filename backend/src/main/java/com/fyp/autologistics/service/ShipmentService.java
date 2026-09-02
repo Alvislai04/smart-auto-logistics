@@ -541,6 +541,7 @@ public class ShipmentService {
 
         boolean actionAllowed = switch (actor.getRole()) {
             case LOGISTICS_PROVIDER -> nextStatus == ShipmentStatus.IN_TRANSIT
+                    || nextStatus == ShipmentStatus.ARRIVED
                     || nextStatus == ShipmentStatus.CANCELLED;
             case ADMIN, MANUFACTURER, DEALERSHIP -> false;
         };
@@ -552,8 +553,8 @@ public class ShipmentService {
 
     private String resolveStatusPermissionMessage(UserRole role) {
         return switch (role) {
-            case MANUFACTURER -> "Manufacturers create shipment details; logistics providers start or cancel transit.";
-            case LOGISTICS_PROVIDER -> "Logistics providers can only start transit or cancel shipments.";
+            case MANUFACTURER -> "Manufacturers create shipment details; logistics providers start transit, confirm arrival, or cancel shipments.";
+            case LOGISTICS_PROVIDER -> "Logistics providers can only start transit, confirm arrival, or cancel shipments.";
             case ADMIN -> "Administrators cannot change shipment workflow status.";
             case DEALERSHIP -> "Dealerships complete delivery by confirming receipt.";
         };

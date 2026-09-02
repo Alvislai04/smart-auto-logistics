@@ -1,15 +1,12 @@
 package com.fyp.autologistics.integration;
 
 import com.fyp.autologistics.entity.AppUser;
-import com.fyp.autologistics.entity.Shipment;
 import com.fyp.autologistics.entity.ShipmentEvent;
 import com.fyp.autologistics.entity.ShipmentPartyProfile;
 import com.fyp.autologistics.entity.VehicleModel;
 import com.fyp.autologistics.enums.AlertType;
-import com.fyp.autologistics.enums.LogisticsStage;
 import com.fyp.autologistics.enums.ShipmentEventSourceType;
 import com.fyp.autologistics.enums.ShipmentEventType;
-import com.fyp.autologistics.enums.ShipmentStatus;
 import com.fyp.autologistics.enums.UserRole;
 import com.fyp.autologistics.repository.AdminNotificationRepository;
 import com.fyp.autologistics.repository.AlertRepository;
@@ -19,7 +16,6 @@ import com.fyp.autologistics.repository.ShipmentEventRepository;
 import com.fyp.autologistics.repository.ShipmentPartyProfileRepository;
 import com.fyp.autologistics.repository.ShipmentRepository;
 import com.fyp.autologistics.repository.VehicleModelRepository;
-import com.fyp.autologistics.service.ShipmentService;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -72,9 +68,6 @@ class ShipmentLifecycleIntegrationTests {
 
     @Autowired
     private ShipmentRepository shipmentRepository;
-
-    @Autowired
-    private ShipmentService shipmentService;
 
     @Autowired
     private AlertRepository alertRepository;
@@ -161,19 +154,9 @@ class ShipmentLifecycleIntegrationTests {
         mockMvc.perform(put("/api/shipments/{shipmentId}/status", shipmentId)
                         .queryParam("status", "ARRIVED")
                         .header(HttpHeaders.AUTHORIZATION, bearer(logisticsToken)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value(
-                        "Logistics providers can only start transit or cancel shipments."
-                ));
-
-        Shipment shipment = shipmentRepository.findById(shipmentId).orElseThrow();
-        shipmentService.updateSystemStatus(
-                shipment,
-                ShipmentStatus.ARRIVED,
-                LogisticsStage.ARRIVED_AT_DEALERSHIP,
-                ShipmentEventSourceType.IOT_SIMULATION,
-                "System simulation detected arrival at the dealership."
-        );
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ARRIVED"))
+                .andExpect(jsonPath("$.currentStage").value("ARRIVED_AT_DEALERSHIP"));
 
         mockMvc.perform(put("/api/shipments/{shipmentId}/status", shipmentId)
                         .queryParam("status", "CANCELLED")

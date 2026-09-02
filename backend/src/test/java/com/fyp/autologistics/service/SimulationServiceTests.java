@@ -140,6 +140,55 @@ class SimulationServiceTests {
     }
 
     @Test
+    void destinationStopsSimulationWithoutBypassingLogisticsArrivalConfirmation() {
+        LocalDateTime now = LocalDateTime.now();
+        Shipment shipment = buildShipment(ShipmentStatus.IN_TRANSIT);
+        SimulationSession activeSession = buildSession(
+                shipment,
+                SimulationSessionStatus.ACTIVE
+        );
+        activeSession.setCurrentLatitude(shipment.getDestinationLatitude());
+        activeSession.setCurrentLongitude(shipment.getDestinationLongitude());
+        activeSession.setNextRunAt(now.minusSeconds(1));
+
+        when(simulationProfileRepository.findByActiveTrueOrderBySortOrderAscDisplayNameAsc())
+                .thenReturn(List.of(buildNormalProfile()));
+        when(shipmentRepository.findShipmentsWithoutSimulationSession(any()))
+                .thenReturn(List.of());
+        when(simulationSessionRepository
+                .findByStatusAndNextRunAtLessThanEqualOrderByNextRunAtAsc(
+                        eq(SimulationSessionStatus.ACTIVE),
+                        any(LocalDateTime.class)
+                ))
+                .thenReturn(List.of(activeSession));
+        when(trackingEventService.createSystemTrackingEvent(
+                eq(SHIPMENT_ID),
+                any(CreateTrackingEventRequest.class),
+                eq(ShipmentEventSourceType.IOT_SIMULATION)
+        )).thenReturn(new TrackingEventResponse(
+                1L,
+                SHIPMENT_ID,
+                shipment.getDestinationLatitude(),
+                shipment.getDestinationLongitude(),
+                60.0,
+                ConditionStatus.NORMAL,
+                now
+        ));
+
+        simulationService.processDueSimulationSessions();
+
+        assertThat(activeSession.getStatus()).isEqualTo(SimulationSessionStatus.COMPLETED);
+        assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.IN_TRANSIT);
+        verify(shipmentService, never()).updateSystemStatus(
+                any(),
+                eq(ShipmentStatus.ARRIVED),
+                any(),
+                any(),
+                any()
+        );
+    }
+
+    @Test
     void normalTelemetryDoesNotClearAnAlertEngineDelay() {
         LocalDateTime now = LocalDateTime.now();
         Shipment delayedShipment = buildShipment(ShipmentStatus.DELAYED);

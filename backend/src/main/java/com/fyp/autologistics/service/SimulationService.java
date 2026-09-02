@@ -252,7 +252,6 @@ public class SimulationService {
         boolean reachedDestination = hasReachedDestination(session, shipment);
 
         if (reachedDestination) {
-            markShipmentArrived(shipment);
             completeSession(session, now);
             return;
         }
@@ -585,16 +584,6 @@ public class SimulationService {
         }
 
         return clamp(session.getIntervalSeconds(), MIN_INTERVAL_SECONDS, MAX_INTERVAL_SECONDS);
-    }
-
-    private void markShipmentArrived(Shipment shipment) {
-        shipmentService.updateSystemStatus(
-                shipment,
-                ShipmentStatus.ARRIVED,
-                LogisticsStage.ARRIVED_AT_DEALERSHIP,
-                ShipmentEventSourceType.IOT_SIMULATION,
-                "System simulation detected arrival at the dealership."
-        );
     }
 
     private void completeSession(SimulationSession session, LocalDateTime now) {

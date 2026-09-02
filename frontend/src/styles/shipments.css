@@ -63,6 +63,12 @@
   align-items: center;
 }
 
+.shipment-row-action-button {
+  min-height: 34px;
+  padding: 7px 11px;
+  font-size: 13px;
+}
+
 .shipment-edit-lock-note {
   display: grid;
   gap: 6px;

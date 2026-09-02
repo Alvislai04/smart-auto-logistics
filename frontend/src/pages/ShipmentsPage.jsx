@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { shipmentApi } from "../api/shipmentApi";
 import { useAuth } from "../auth/AuthContext";
+import { useToast } from "../components/feedback/ToastContext";
 import { formatDateTime, formatEnumLabel } from "../utils/formatters";
 import { isShipmentEditableForUser } from "../utils/shipmentFormUtils";
+import { getAvailableShipmentStatusActions } from "../utils/shipmentStatusActions";
 
 const shipmentStatuses = [
   "CREATED",
@@ -90,11 +92,13 @@ function normalizePageResponse(data) {
 
 function ShipmentsPage() {
   const { currentUser } = useAuth();
+  const { showToast } = useToast();
   const [shipments, setShipments] = useState([]);
   const [query, setQuery] = useState(defaultQuery);
   const [searchInput, setSearchInput] = useState(defaultQuery.search);
   const [pageInfo, setPageInfo] = useState(defaultPageInfo);
   const [isLoading, setIsLoading] = useState(true);
+  const [updatingShipmentId, setUpdatingShipmentId] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
 
   const loadShipments = useCallback(async () => {
@@ -157,6 +161,31 @@ function ShipmentsPage() {
       ...previousQuery,
       page: Math.max(0, Math.min(nextPage, Math.max(pageInfo.totalPages - 1, 0))),
     }));
+  };
+
+  const handleMarkArrived = async (shipment) => {
+    try {
+      setUpdatingShipmentId(shipment.id);
+      setErrorMessage("");
+      await shipmentApi.updateStatus(shipment.id, "ARRIVED");
+      await loadShipments();
+      showToast({
+        type: "success",
+        title: "Arrival confirmed",
+        message: `${shipment.shipmentCode} is ready for dealership receipt confirmation.`,
+      });
+    } catch (error) {
+      const message =
+        error.response?.data?.message || "Failed to mark the shipment as arrived.";
+      setErrorMessage(message);
+      showToast({
+        type: "error",
+        title: "Arrival not confirmed",
+        message,
+      });
+    } finally {
+      setUpdatingShipmentId(null);
+    }
   };
 
   const firstVisibleItem =
@@ -330,6 +359,21 @@ function ShipmentsPage() {
                       <Link to={`/shipments/${shipment.id}`}>View</Link>
                       {isShipmentEditableForUser(shipment, currentUser) && (
                         <Link to={`/shipments/${shipment.id}/edit`}>Edit</Link>
+                      )}
+                      {getAvailableShipmentStatusActions(
+                        shipment.status,
+                        currentUser?.role,
+                      ).some((action) => action.status === "ARRIVED") && (
+                        <button
+                          type="button"
+                          className="shipment-row-action-button"
+                          disabled={updatingShipmentId !== null}
+                          onClick={() => handleMarkArrived(shipment)}
+                        >
+                          {updatingShipmentId === shipment.id
+                            ? "Updating..."
+                            : "Mark Arrived"}
+                        </button>
                       )}
                     </div>
                   </td>

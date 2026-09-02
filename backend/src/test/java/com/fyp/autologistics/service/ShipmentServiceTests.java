@@ -250,7 +250,7 @@ class ShipmentServiceTests {
                 "manufacturer@example.com"
         ))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("logistics providers start or cancel transit");
+                .hasMessageContaining("logistics providers start transit, confirm arrival, or cancel shipments");
 
         assertThat(shipment.getStatus()).isEqualTo(ShipmentStatus.CREATED);
         verify(shipmentRepository, never()).save(any(Shipment.class));
@@ -282,6 +282,40 @@ class ShipmentServiceTests {
     }
 
     @Test
+    void logisticsProviderCanConfirmArrival() {
+        Shipment shipment = buildShipment(ShipmentStatus.IN_TRANSIT, LogisticsStage.IN_TRANSIT);
+        AppUser actor = buildActor(
+                "Logistics Operator",
+                "logistics@example.com",
+                UserRole.LOGISTICS_PROVIDER,
+                "LSP-001"
+        );
+        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(authenticatedUserService.getAuthenticatedUser("logistics@example.com"))
+                .thenReturn(actor);
+        when(shipmentRepository.save(shipment)).thenReturn(shipment);
+        when(shipmentEventRepository.save(any(ShipmentEvent.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ShipmentResponse response = shipmentService.updateShipmentStatus(
+                42L,
+                ShipmentStatus.ARRIVED,
+                "logistics@example.com"
+        );
+
+        assertThat(response.getStatus()).isEqualTo(ShipmentStatus.ARRIVED);
+        assertThat(response.getCurrentStage())
+                .isEqualTo(LogisticsStage.ARRIVED_AT_DEALERSHIP);
+
+        ArgumentCaptor<ShipmentEvent> historyCaptor = ArgumentCaptor.forClass(ShipmentEvent.class);
+        verify(shipmentEventRepository).save(historyCaptor.capture());
+        assertThat(historyCaptor.getValue().getActorEmail())
+                .isEqualTo("logistics@example.com");
+        assertThat(historyCaptor.getValue().getSourceType())
+                .isEqualTo(ShipmentEventSourceType.USER_ACTION);
+    }
+
+    @Test
     void manufacturerCannotCancelShipment() {
         Shipment shipment = buildShipment(ShipmentStatus.CREATED, LogisticsStage.MANUFACTURING);
         when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
@@ -299,7 +333,7 @@ class ShipmentServiceTests {
                 "manufacturer@example.com"
         ))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("logistics providers start or cancel transit");
+                .hasMessageContaining("logistics providers start transit, confirm arrival, or cancel shipments");
 
         verify(shipmentRepository, never()).save(any(Shipment.class));
     }

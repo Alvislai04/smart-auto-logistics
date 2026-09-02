@@ -6,6 +6,12 @@ const SHIPMENT_STATUS_ACTIONS = [
     allowedRoles: ["LOGISTICS_PROVIDER"],
   },
   {
+    label: "Mark Arrived",
+    status: "ARRIVED",
+    allowedFrom: ["IN_TRANSIT", "DELAYED"],
+    allowedRoles: ["LOGISTICS_PROVIDER"],
+  },
+  {
     label: "Cancel",
     status: "CANCELLED",
     allowedFrom: [

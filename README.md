@@ -38,7 +38,7 @@ The project currently includes:
 - Admin-managed database records for shipment dropdowns and simulation behavior
 - Supabase PostgreSQL Session Pooler configuration
 - Manufacturer shipment creation, listing, details, and pre-transit editing;
-  logistics providers control transit start and cancellation
+  logistics providers control transit start, arrival confirmation, and cancellation
 - Shipment creation route/API restricted to the manufacturer role
 - Shipment detail editing for admin and linked manufacturer accounts before
   pickup or in-transit tracking begins
@@ -65,8 +65,8 @@ The project currently includes:
 - Automatic simulation session provisioning when a logistics provider starts
   transit, with a
   monitoring-only Simulation page for admin/logistics users
-- Immediate simulation shutdown after arrival, delivery, or cancellation so
-  terminal shipment statuses cannot be replaced by later telemetry evaluation
+- Immediate simulation shutdown at the destination, arrival, delivery, or
+  cancellation so later telemetry cannot overwrite the workflow handoff
 - Leaflet map visualization with route history and planned route markers
 - Advanced alert rules for delay, idle, ETA overdue, missing tracking updates,
   route deviation, sensor warning, and progress shortfall
@@ -361,8 +361,8 @@ Manufacturer creates shipment with generated shipment code
 -> Backend assigns Manufacturing stage and Not Started WIP status
 -> Logistics provider selects Start Transit or Cancel
 -> Backend system generates tracking updates
--> Backend simulation marks the shipment arrived at its destination
--> Logistics workflow actions end at the dealership handoff
+-> Backend simulation stops when GPS reaches the destination
+-> Logistics provider selects Mark Arrived to complete the dealership handoff
 -> Assigned dealership confirms delivery receipt
 -> Shipment becomes delivered
 ```
@@ -379,7 +379,8 @@ Manufacturer creates shipment with route coordinates
 -> Route-deviation profiles apply one bounded, non-accumulating route offset
 -> Scheduler records speed and condition tracking events
 -> Map, tracking history, alerts, and simulation monitor update
--> Session completes when destination or max event limit is reached
+-> Session completes when the destination or max event limit is reached
+-> Logistics provider confirms arrival before dealership receipt confirmation begins
 ```
 
 The automatic scheduler creates at most one active system-managed session for
