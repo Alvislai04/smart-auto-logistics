@@ -17,6 +17,7 @@ import com.fyp.autologistics.repository.ShipmentEventRepository;
 import com.fyp.autologistics.repository.ShipmentPartyProfileRepository;
 import com.fyp.autologistics.repository.ShipmentRepository;
 import com.fyp.autologistics.repository.VehicleModelRepository;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -50,6 +51,7 @@ class ShipmentServiceTests {
             mock(AuthenticatedUserService.class);
     private final ApplicationEventPublisher applicationEventPublisher =
             mock(ApplicationEventPublisher.class);
+    private final EntityManager entityManager = mock(EntityManager.class);
     private final Clock applicationClock = Clock.fixed(
             Instant.parse("2026-08-26T04:00:00Z"),
             ZoneId.of("Asia/Kuala_Lumpur")
@@ -63,6 +65,7 @@ class ShipmentServiceTests {
             blockchainRecordService,
             authenticatedUserService,
             applicationEventPublisher,
+            entityManager,
             applicationClock
     );
 
@@ -89,9 +92,33 @@ class ShipmentServiceTests {
     }
 
     @Test
+    void manufacturerCannotCreateShipmentForAnotherCompanyProfile() {
+        CreateShipmentRequest request = new CreateShipmentRequest();
+        request.setEstimatedArrival(LocalDateTime.now(applicationClock).plusDays(1));
+        request.setManufacturerKey("MFG-OTHER");
+        when(authenticatedUserService.getAuthenticatedUser("manufacturer@example.com"))
+                .thenReturn(buildActor(
+                        "Manufacturer Operator",
+                        "manufacturer@example.com",
+                        UserRole.MANUFACTURER,
+                        "MFG-001"
+                ));
+
+        assertThatThrownBy(() -> shipmentService.createShipment(
+                request,
+                "manufacturer@example.com"
+        ))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Manufacturers can only create shipments for their own company profile.");
+
+        verify(vehicleModelRepository, never()).findByModelCodeAndActiveTrue(any());
+        verify(shipmentRepository, never()).save(any(Shipment.class));
+    }
+
+    @Test
     void unchangedManualStatusDoesNotCreateDuplicateHistoryOrAlertEvent() {
         Shipment shipment = buildShipment(ShipmentStatus.IN_TRANSIT, LogisticsStage.IN_TRANSIT);
-        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(shipmentRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(shipment));
         when(authenticatedUserService.getAuthenticatedUser("logistics@example.com"))
                 .thenReturn(buildActor(
                         "Logistics Operator",
@@ -121,7 +148,7 @@ class ShipmentServiceTests {
                 UserRole.LOGISTICS_PROVIDER,
                 null
         );
-        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(shipmentRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(shipment));
         when(authenticatedUserService.getAuthenticatedUser("logistics@example.com"))
                 .thenReturn(actor);
         when(shipmentRepository.save(shipment)).thenReturn(shipment);
@@ -159,7 +186,7 @@ class ShipmentServiceTests {
     @Test
     void invalidManualTransitionIsRejectedWithoutPersistence() {
         Shipment shipment = buildShipment(ShipmentStatus.CREATED, LogisticsStage.MANUFACTURING);
-        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(shipmentRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(shipment));
         when(authenticatedUserService.getAuthenticatedUser("admin@example.com"))
                 .thenReturn(buildActor());
 
@@ -183,7 +210,7 @@ class ShipmentServiceTests {
                 ShipmentStatus.ARRIVED,
                 LogisticsStage.ARRIVED_AT_DEALERSHIP
         );
-        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(shipmentRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(shipment));
         when(authenticatedUserService.getAuthenticatedUser("logistics@example.com"))
                 .thenReturn(buildActor(
                         "Logistics Operator",
@@ -210,7 +237,7 @@ class ShipmentServiceTests {
                 ShipmentStatus.ARRIVED,
                 LogisticsStage.ARRIVED_AT_DEALERSHIP
         );
-        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(shipmentRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(shipment));
         when(authenticatedUserService.getAuthenticatedUser("logistics@example.com"))
                 .thenReturn(buildActor(
                         "Logistics Operator",
@@ -241,7 +268,7 @@ class ShipmentServiceTests {
                 "MFG-001"
         );
 
-        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(shipmentRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(shipment));
         when(authenticatedUserService.getAuthenticatedUser("manufacturer@example.com"))
                 .thenReturn(manufacturer);
         assertThatThrownBy(() -> shipmentService.updateShipmentStatus(
@@ -259,7 +286,7 @@ class ShipmentServiceTests {
     @Test
     void logisticsProviderCanStartTransit() {
         Shipment shipment = buildShipment(ShipmentStatus.CREATED, LogisticsStage.MANUFACTURING);
-        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(shipmentRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(shipment));
         when(authenticatedUserService.getAuthenticatedUser("logistics@example.com"))
                 .thenReturn(buildActor(
                         "Logistics Operator",
@@ -290,7 +317,7 @@ class ShipmentServiceTests {
                 UserRole.LOGISTICS_PROVIDER,
                 "LSP-001"
         );
-        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(shipmentRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(shipment));
         when(authenticatedUserService.getAuthenticatedUser("logistics@example.com"))
                 .thenReturn(actor);
         when(shipmentRepository.save(shipment)).thenReturn(shipment);
@@ -318,7 +345,7 @@ class ShipmentServiceTests {
     @Test
     void manufacturerCannotCancelShipment() {
         Shipment shipment = buildShipment(ShipmentStatus.CREATED, LogisticsStage.MANUFACTURING);
-        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(shipmentRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(shipment));
         when(authenticatedUserService.getAuthenticatedUser("manufacturer@example.com"))
                 .thenReturn(buildActor(
                         "Manufacturer Operator",
@@ -354,7 +381,7 @@ class ShipmentServiceTests {
         ConfirmDeliveryReceiptRequest request = new ConfirmDeliveryReceiptRequest();
         request.setConfirmedBy("Untrusted Client Value");
 
-        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(shipmentRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(shipment));
         when(authenticatedUserService.getAuthenticatedUser("dealer@example.com"))
                 .thenReturn(dealership);
         when(shipmentRepository.save(shipment)).thenReturn(shipment);
@@ -388,7 +415,7 @@ class ShipmentServiceTests {
         );
         ConfirmDeliveryReceiptRequest request = new ConfirmDeliveryReceiptRequest();
 
-        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(shipmentRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(shipment));
         when(authenticatedUserService.getAuthenticatedUser("dealer@example.com"))
                 .thenReturn(dealership);
         when(shipmentRepository.save(shipment)).thenReturn(shipment);
@@ -415,7 +442,7 @@ class ShipmentServiceTests {
         ConfirmDeliveryReceiptRequest request = new ConfirmDeliveryReceiptRequest();
         request.setConfirmedBy("Other Dealership");
 
-        when(shipmentRepository.findById(42L)).thenReturn(Optional.of(shipment));
+        when(shipmentRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(shipment));
         when(authenticatedUserService.getAuthenticatedUser("other@example.com"))
                 .thenReturn(buildActor(
                         "Other Dealership",
@@ -442,6 +469,7 @@ class ShipmentServiceTests {
                 ShipmentStatus.READY_FOR_DISPATCH,
                 LogisticsStage.STOCK_YARD
         );
+        when(shipmentRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(shipment));
         when(shipmentRepository.save(shipment)).thenReturn(shipment);
 
         Shipment updated = shipmentService.updateSystemStatus(
@@ -461,6 +489,7 @@ class ShipmentServiceTests {
     @Test
     void systemStatusChangePublishesIoTOrderUpdateSource() {
         Shipment shipment = buildShipment(ShipmentStatus.PICKED_UP, LogisticsStage.STOCK_YARD);
+        when(shipmentRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(shipment));
         when(shipmentRepository.save(shipment)).thenReturn(shipment);
         when(shipmentEventRepository.save(any(ShipmentEvent.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -484,6 +513,34 @@ class ShipmentServiceTests {
                 ShipmentStatus.IN_TRANSIT,
                 ShipmentEventSourceType.IOT_SIMULATION
         ));
+    }
+
+    @Test
+    void staleSystemUpdateCannotOverwriteArrivedShipment() {
+        Shipment staleSimulationShipment = buildShipment(
+                ShipmentStatus.IN_TRANSIT,
+                LogisticsStage.IN_TRANSIT
+        );
+        Shipment currentShipment = buildShipment(
+                ShipmentStatus.ARRIVED,
+                LogisticsStage.ARRIVED_AT_DEALERSHIP
+        );
+        when(shipmentRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(currentShipment));
+
+        Shipment result = shipmentService.updateSystemStatus(
+                staleSimulationShipment,
+                ShipmentStatus.DELAYED,
+                LogisticsStage.IN_TRANSIT,
+                ShipmentEventSourceType.IOT_SIMULATION,
+                "A delayed simulation update arrived late."
+        );
+
+        assertThat(result.getStatus()).isEqualTo(ShipmentStatus.ARRIVED);
+        assertThat(result.getCurrentStage())
+                .isEqualTo(LogisticsStage.ARRIVED_AT_DEALERSHIP);
+        verify(shipmentRepository, never()).save(any(Shipment.class));
+        verify(shipmentEventRepository, never()).save(any(ShipmentEvent.class));
+        verify(applicationEventPublisher, never()).publishEvent(any());
     }
 
     private Shipment buildShipment(ShipmentStatus status, LogisticsStage stage) {

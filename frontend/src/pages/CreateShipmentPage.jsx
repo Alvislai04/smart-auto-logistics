@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { shipmentApi } from "../api/shipmentApi";
+import { useAuth } from "../auth/AuthContext";
 import { useToast } from "../components/feedback/ToastContext";
 import ShipmentForm from "../components/forms/ShipmentForm";
 import {
@@ -12,11 +13,14 @@ import {
   initialShipmentFormData,
   minimumFutureDateTimeLocalValue,
   normalizeShipmentFormOptions,
+  scopeManufacturerOrigins,
   validateShipmentForm,
 } from "../utils/shipmentFormUtils";
 
 function CreateShipmentPage() {
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
+  const manufacturerPartyKey = currentUser?.partyProfileKey;
   const { showToast } = useToast();
 
   const [formData, setFormData] = useState(initialShipmentFormData);
@@ -32,16 +36,27 @@ function CreateShipmentPage() {
 
       const options = await shipmentApi.getFormOptions();
       const normalizedOptions = normalizeShipmentFormOptions(options);
-
-      setFormOptions(normalizedOptions);
-      setFormData((previousFormData) =>
-        applyLoadedOptions(previousFormData, normalizedOptions),
+      const scopedOptions = scopeManufacturerOrigins(
+        normalizedOptions,
+        manufacturerPartyKey,
       );
 
-      if (
-        normalizedOptions.vehicleModels.length === 0 ||
-        normalizedOptions.manufacturerOrigins.length === 0 ||
-        normalizedOptions.dealershipDestinations.length === 0
+      setFormOptions(scopedOptions);
+      setFormData((previousFormData) =>
+        applyLoadedOptions(previousFormData, scopedOptions),
+      );
+
+      if (!manufacturerPartyKey) {
+        setErrorMessage(
+          "Your manufacturer account is not linked to a company profile. Please contact an administrator.",
+        );
+      } else if (scopedOptions.manufacturerOrigins.length === 0) {
+        setErrorMessage(
+          "Your linked manufacturer profile is inactive or unavailable. Please contact an administrator.",
+        );
+      } else if (
+        scopedOptions.vehicleModels.length === 0 ||
+        scopedOptions.dealershipDestinations.length === 0
       ) {
         setErrorMessage(
           "Shipment options are incomplete. Please configure shipment master data before creating shipments.",
@@ -54,7 +69,7 @@ function CreateShipmentPage() {
     } finally {
       setIsLoadingOptions(false);
     }
-  }, []);
+  }, [manufacturerPartyKey]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect

@@ -54,6 +54,8 @@ Legend:
 - [x] Restrict receipt confirmation to the dealership assigned by `dealership_key`
 - [x] Set `DELIVERED` only after assigned dealership receipt confirmation
 - [x] Assign `MANUFACTURING` stage and `NOT_STARTED` WIP state during creation
+- [x] Limit shipment creation to the authenticated manufacturer's registered
+  company profile in both the UI and backend API
 - [x] Reject past estimated arrival values in the browser and backend API
 - [x] Restrict manual status actions to logistics transit start, arrival confirmation,
   and cancellation
@@ -102,6 +104,10 @@ CANCELLED
 - [x] Stop active simulation at the destination, arrival, delivery, or cancellation
 - [x] Restrict delay monitoring to `IN_TRANSIT` and `DELAYED` shipments
 - [x] Prevent historical telemetry from reverting `ARRIVED` to `DELAYED`
+- [x] Serialize manual and system shipment status writes with a database row
+  lock and refresh before applying IoT or alert-engine changes
+- [x] Treat `ARRIVED`, `DELIVERED`, and `CANCELLED` as terminal for all
+  system-generated status updates
 - [x] Lock logistics workflow actions after `ARRIVED`; dealership receipt is the
   only delivery-completion action
 
@@ -515,28 +521,12 @@ Implemented access:
 
 ---
 
-### 5.2 QR Code Flow
+### 5.2 QR Code Flow (Excluded)
 
-- [ ] Generate QR code for each shipment
-- [ ] QR code opens shipment details page
-- [ ] Logistics partner scans QR
-- [ ] QR scan confirms shipment identity
-- [ ] QR scan supports pickup / arrival / delivery confirmation
-- [ ] Important QR-triggered events are automatically recorded to blockchain
-
-Planned flow:
-
-```text
-Scan QR
-↓
-Open shipment page
-↓
-Confirm pickup / arrival / delivery
-↓
-Create shipment event
-↓
-Auto blockchain proof
-```
+- [x] QR generation and scanning remain outside the approved implementation
+  scope
+- [x] No QR routes, packages, database columns, or partial implementation are
+  retained in the production application
 
 ---
 
@@ -873,7 +863,9 @@ Start Transit (logistics provider)
 ↓
 System simulates tracking updates
 ↓
-System detects arrival
+System reaches the destination and pauses movement
+↓
+Logistics provider selects Mark Arrived
 ↓
 Confirm Receipt (assigned dealership)
 ↓

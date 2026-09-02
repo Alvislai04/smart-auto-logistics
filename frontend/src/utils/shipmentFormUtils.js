@@ -47,6 +47,19 @@ export function normalizeShipmentFormOptions(options = {}) {
   };
 }
 
+export function scopeManufacturerOrigins(formOptions, partyProfileKey) {
+  const normalizedPartyKey = String(partyProfileKey ?? "").trim();
+
+  return {
+    ...formOptions,
+    manufacturerOrigins: normalizedPartyKey
+      ? formOptions.manufacturerOrigins.filter(
+          (manufacturer) => manufacturer.key === normalizedPartyKey,
+        )
+      : [],
+  };
+}
+
 export function applyManufacturerSelection(formData, manufacturerKey, formOptions) {
   const manufacturer = findOptionByKey(
     formOptions.manufacturerOrigins,

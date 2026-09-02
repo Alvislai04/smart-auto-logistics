@@ -39,7 +39,8 @@ The project currently includes:
 - Supabase PostgreSQL Session Pooler configuration
 - Manufacturer shipment creation, listing, details, and pre-transit editing;
   logistics providers control transit start, arrival confirmation, and cancellation
-- Shipment creation route/API restricted to the manufacturer role
+- Shipment creation route/API restricted to the manufacturer role and the
+  signed-in manufacturer's own `party_profile_key`
 - Shipment detail editing for admin and linked manufacturer accounts before
   pickup or in-transit tracking begins
 - Auto-generated unique shipment codes controlled by the backend
@@ -67,6 +68,9 @@ The project currently includes:
   monitoring-only Simulation page for admin/logistics users
 - Immediate simulation shutdown at the destination, arrival, delivery, or
   cancellation so later telemetry cannot overwrite the workflow handoff
+- Database-serialized workflow status changes that refresh the current shipment
+  before IoT or alert-engine updates, preventing stale `DELAYED` writes from
+  replacing `ARRIVED`, `DELIVERED`, or `CANCELLED`
 - Leaflet map visualization with route history and planned route markers
 - Advanced alert rules for delay, idle, ETA overdue, missing tracking updates,
   route deviation, sensor warning, and progress shortfall
@@ -348,6 +352,29 @@ Open http://localhost:5173/login and sign in again.
 If the browser is still stuck on an old session, use the app logout button or
 clear local storage for `localhost:5173`, then sign in again with an active
 account created by the admin.
+
+### Manufacturer Alerts Page Is Empty
+
+Manufacturer alerts are intentionally limited to shipments whose
+`manufacturer_key` matches the signed-in account's `party_profile_key`. Check
+the account link and matching shipment ownership when one manufacturer sees no
+alerts while other roles do:
+
+```sql
+select email, party_profile_key
+from app_users
+where role = 'MANUFACTURER';
+
+select manufacturer_key, status, count(*)
+from shipments
+group by manufacturer_key, status
+order by manufacturer_key, status;
+```
+
+Accounts created or updated through **Admin > User Accounts** are linked
+automatically. Legacy accounts with a missing key require a one-time database
+repair to an existing manufacturer profile; do not grant global manufacturer
+alert access because that would expose another company's shipments.
 
 ## Main Workflows
 

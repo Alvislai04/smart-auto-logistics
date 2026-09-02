@@ -3,7 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildCreateShipmentPayload,
   buildShipmentPayload,
+  emptyShipmentFormOptions,
   minimumFutureDateTimeLocalValue,
+  scopeManufacturerOrigins,
   validateShipmentForm,
 } from "./shipmentFormUtils";
 
@@ -33,6 +35,20 @@ afterEach(() => {
 });
 
 describe("shipment form scheduling", () => {
+  it("limits manufacturer origins to the authenticated company profile", () => {
+    const options = {
+      ...emptyShipmentFormOptions,
+      manufacturerOrigins: [
+        { key: "MFG-001", name: "Own Manufacturer" },
+        { key: "MFG-002", name: "Other Manufacturer" },
+      ],
+    };
+
+    expect(scopeManufacturerOrigins(options, "MFG-001").manufacturerOrigins)
+      .toEqual([{ key: "MFG-001", name: "Own Manufacturer" }]);
+    expect(scopeManufacturerOrigins(options, null).manufacturerOrigins).toEqual([]);
+  });
+
   it("omits the server-managed shipment start from API payloads", () => {
     expect(buildShipmentPayload(validFormData)).not.toHaveProperty(
       "estimatedDeparture",

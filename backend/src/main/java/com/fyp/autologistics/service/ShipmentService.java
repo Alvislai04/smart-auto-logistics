@@ -25,6 +25,7 @@ import com.fyp.autologistics.repository.ShipmentPartyProfileRepository;
 import com.fyp.autologistics.repository.ShipmentRepository;
 import com.fyp.autologistics.repository.VehicleModelRepository;
 import com.fyp.autologistics.specification.ShipmentSpecifications;
+import jakarta.persistence.EntityManager;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -51,6 +52,11 @@ public class ShipmentService {
             WorkInProgressStatus.NOT_STARTED;
     private static final DateTimeFormatter SHIPMENT_CODE_DATE_FORMATTER =
             DateTimeFormatter.BASIC_ISO_DATE;
+    private static final Set<ShipmentStatus> TERMINAL_SHIPMENT_STATUSES = Set.of(
+            ShipmentStatus.ARRIVED,
+            ShipmentStatus.DELIVERED,
+            ShipmentStatus.CANCELLED
+    );
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
             "id",
@@ -77,6 +83,7 @@ public class ShipmentService {
     private final BlockchainRecordService blockchainRecordService;
     private final AuthenticatedUserService authenticatedUserService;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final EntityManager entityManager;
     private final Clock applicationClock;
 
     public ShipmentService(
@@ -87,6 +94,7 @@ public class ShipmentService {
             BlockchainRecordService blockchainRecordService,
             AuthenticatedUserService authenticatedUserService,
             ApplicationEventPublisher applicationEventPublisher,
+            EntityManager entityManager,
             Clock applicationClock
     ) {
         this.shipmentRepository = shipmentRepository;
@@ -96,6 +104,7 @@ public class ShipmentService {
         this.blockchainRecordService = blockchainRecordService;
         this.authenticatedUserService = authenticatedUserService;
         this.applicationEventPublisher = applicationEventPublisher;
+        this.entityManager = entityManager;
         this.applicationClock = applicationClock;
     }
 
@@ -105,6 +114,7 @@ public class ShipmentService {
         LocalDateTime estimatedDeparture = LocalDateTime.now(applicationClock).withNano(0);
         validateEstimatedArrivalIsFuture(request.getEstimatedArrival());
         validateShipmentSchedule(estimatedDeparture, request.getEstimatedArrival());
+        validateShipmentCreationAllowed(actor, request.getManufacturerKey());
         VehicleModel vehicleModel = findActiveVehicleModel(request.getVehicleModelKey());
 
         ShipmentPartyProfile manufacturer = findActiveParty(
@@ -338,7 +348,7 @@ public class ShipmentService {
             ShipmentStatus status,
             String actorEmail
     ) {
-        Shipment shipment = findShipmentEntityById(id);
+        Shipment shipment = findShipmentEntityByIdForUpdate(id);
         AppUser actor = authenticatedUserService.getAuthenticatedUser(actorEmail);
         ShipmentStatus previousStatus = shipment.getStatus();
 
@@ -379,7 +389,7 @@ public class ShipmentService {
             ConfirmDeliveryReceiptRequest request,
             String actorEmail
     ) {
-        Shipment shipment = findShipmentEntityById(id);
+        Shipment shipment = findShipmentEntityByIdForUpdate(id);
         AppUser actor = authenticatedUserService.getAuthenticatedUser(actorEmail);
 
         validateReceiptConfirmationAllowed(shipment, actor);
@@ -441,6 +451,7 @@ public class ShipmentService {
             .orElseThrow(() -> new ResourceNotFoundException("Shipment not found with id: " + id));
     }
 
+    @Transactional
     public Shipment updateSystemStatus(
             Shipment shipment,
             ShipmentStatus status,
@@ -448,15 +459,21 @@ public class ShipmentService {
             ShipmentEventSourceType sourceType,
             String description
     ) {
-        ShipmentStatus previousStatus = shipment.getStatus();
+        Shipment currentShipment = findShipmentEntityByIdForUpdate(shipment.getId());
+        entityManager.refresh(currentShipment);
+        ShipmentStatus previousStatus = currentShipment.getStatus();
 
-        if (previousStatus == status && shipment.getCurrentStage() == stage) {
-            return shipment;
+        if (TERMINAL_SHIPMENT_STATUSES.contains(previousStatus)) {
+            return currentShipment;
         }
 
-        shipment.setStatus(status);
-        shipment.setCurrentStage(stage);
-        Shipment updatedShipment = shipmentRepository.save(shipment);
+        if (previousStatus == status && currentShipment.getCurrentStage() == stage) {
+            return currentShipment;
+        }
+
+        currentShipment.setStatus(status);
+        currentShipment.setCurrentStage(stage);
+        Shipment updatedShipment = shipmentRepository.save(currentShipment);
 
         if (previousStatus != status) {
             createShipmentEvent(
@@ -472,6 +489,11 @@ public class ShipmentService {
         }
 
         return updatedShipment;
+    }
+
+    private Shipment findShipmentEntityByIdForUpdate(Long id) {
+        return shipmentRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Shipment not found with id: " + id));
     }
 
     private void publishStatusChangedEvent(
@@ -621,6 +643,26 @@ public class ShipmentService {
                 || !actorPartyKey.equals(normalizedRequestedManufacturerKey)) {
             throw new BadRequestException(
                     "Manufacturers can only edit shipments linked to their own company profile."
+            );
+        }
+    }
+
+    private void validateShipmentCreationAllowed(AppUser actor, String requestedManufacturerKey) {
+        if (actor.getRole() != UserRole.MANUFACTURER) {
+            throw new BadRequestException("Only manufacturers can create shipments.");
+        }
+
+        String actorPartyKey = normalizeText(actor.getPartyProfileKey());
+
+        if (actorPartyKey == null) {
+            throw new BadRequestException(
+                    "Your manufacturer account is not linked to a shipment party profile."
+            );
+        }
+
+        if (!actorPartyKey.equals(normalizeText(requestedManufacturerKey))) {
+            throw new BadRequestException(
+                    "Manufacturers can only create shipments for their own company profile."
             );
         }
     }
