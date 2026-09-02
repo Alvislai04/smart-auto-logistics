@@ -82,11 +82,15 @@ The project currently includes:
 - Shipment edit events recorded in the audit timeline and blockchain ledger
 - Audit timeline actor/source metadata for user actions, IoT simulation events,
   alert-engine events, system automation, and legacy records
-- Real local blockchain ledger integration using Hardhat, Solidity, and Web3j
+- Real blockchain ledger integration using Hardhat, Solidity, Web3j, and the
+  deployed Sepolia `ShipmentLedger` contract
 - Admin blockchain monitor with live node/contract/signer health, configured
   contract address, record filtering, and pagination
 - Guarded admin retry for failed blockchain writes with persistent attempt
   history and original stored-hash preservation
+- Resilient blockchain receipt polling that tolerates temporary RPC failures,
+  preserves submitted transaction hashes as `PENDING`, serializes signer writes
+  to prevent nonce collisions, and recovers already-confirmed events before retry
 - Admin/company notification records for blockchain integrity issues
 - Admin Master Data page at `/admin/master-data`
 - Production Docker images for Spring Boot and React, with Nginx SPA routing,
@@ -406,9 +410,14 @@ Admin opens User Accounts
 Important shipment event occurs
 -> Backend hashes event payload with SHA-256
 -> Backend writes hash to ShipmentLedger smart contract
--> Database stores transaction hash and block number
+-> Backend polls for the transaction receipt while tolerating temporary RPC errors
+-> Confirmed transaction stores its hash and block number as RECORDED
+-> Broadcast transaction with uncertain confirmation keeps its hash as PENDING
 -> Admin monitor reports live RPC, contract, signer, chain, and block health
--> Failed writes without an on-chain transaction can be retried by an admin
+-> Admin can verify a pending transaction after network confirmation
+-> Failed writes without a submitted transaction can be retried by an admin
+-> Retry checks the contract first and recovers an existing matching event
+   instead of sending a duplicate transaction
 -> Retry writes the original stored event hash and records attempt history
 -> Admin can verify database record against on-chain hash
 -> Failed verification creates admin/company integrity notifications
@@ -416,11 +425,13 @@ Important shipment event occurs
 
 When blockchain integration is disabled, automatic shipment-event anchoring is
 skipped and no failed blockchain record or admin notification is created. When
-the integration is enabled but a real ledger write fails, the record is saved as
-`FAILED` with a clear message for admin review. Retry is enabled only when the
-health endpoint reports the node, deployed contract, and signer as ready.
-Records that already have an on-chain transaction are never eligible for another
-write.
+the integration is enabled but a transaction is rejected before submission, the
+record is saved as `FAILED` with the specific sanitized cause for admin review.
+When a transaction was accepted but its receipt cannot yet be confirmed, its
+transaction hash is retained and the record remains `PENDING` for verification.
+Retry is enabled only when the health endpoint reports the node, deployed
+contract, and signer as ready. Every retry performs an on-chain preflight check,
+so records already present in the contract are recovered without another write.
 
 The monitor correctly reports `DISABLED` while `BLOCKCHAIN_ENABLED=false`. An
 online deployment becomes healthy only after it is configured with an

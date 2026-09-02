@@ -25,6 +25,7 @@ function canRetryRecord(record) {
 function canVerifyRecord(record) {
   return (
     record.status === "RECORDED" ||
+    (record.status === "PENDING" && Boolean(record.transactionHash)) ||
     (record.status === "FAILED" && Boolean(record.transactionHash))
   );
 }

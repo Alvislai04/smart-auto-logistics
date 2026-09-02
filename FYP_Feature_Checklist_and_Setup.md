@@ -22,8 +22,7 @@ The current development stack is:
 | Database                 | PostgreSQL                               |
 | API Testing              | Postman                                  |
 | Map                      | Leaflet + React Leaflet                  |
-| Blockchain Current Stage | Mock blockchain record + SHA-256 hashing |
-| Future Blockchain Stage  | Hardhat + Solidity + Web3j               |
+| Blockchain               | Hardhat + Solidity + Web3j + Sepolia     |
 | IDE                      | VS Code                                  |
 
 ---
@@ -231,8 +230,8 @@ DELIVERY_CONFIRMED
 - [x] Blockchain record controller
 - [x] Generate SHA-256 hash for shipment events
 - [x] Store event hash
-- [x] Store mock transaction hash
-- [x] Store mock block number
+- [x] Store real transaction hash
+- [x] Store real block number
 - [x] Store blockchain record status
 - [x] Get blockchain records by shipment ID
 - [x] Get all blockchain records for admin monitor
@@ -241,7 +240,14 @@ DELIVERY_CONFIRMED
 - [x] Mark blockchain record as `FAILED` when verification fails
 - [x] Store verification message
 - [x] Store verified timestamp
-- [~] Real blockchain transaction using Solidity/Hardhat/Web3j
+- [x] Real blockchain transaction using Solidity/Hardhat/Web3j
+- [x] Sepolia `ShipmentLedger` deployment support
+- [x] Preserve submitted transaction hash when receipt confirmation is uncertain
+- [x] Keep uncertain submitted transactions as `PENDING` instead of false `FAILED`
+- [x] Continue receipt polling after temporary RPC errors
+- [x] Serialize signer submissions to prevent concurrent nonce collisions
+- [x] Check the contract before retrying and recover already-recorded events
+- [x] Prevent duplicate on-chain writes during retry
 
 Current blockchain statuses:
 
@@ -251,11 +257,12 @@ RECORDED
 FAILED
 ```
 
-Current stage:
+Current implementation:
 
 ```text
-Mock blockchain record implemented.
-Real Solidity/Hardhat integration not yet implemented.
+Shipment event hashes are written to the deployed Solidity ledger through Web3j.
+The backend stores real transaction proof, supports integrity verification, and
+provides guarded recovery for failed or uncertain submissions.
 ```
 
 ---
@@ -409,9 +416,11 @@ Confirm Receipt (assigned dealership; completes delivery)
 - [x] View transaction hash
 - [x] View block number
 - [x] Verify blockchain record integrity button
+- [x] Verify submitted `PENDING` transaction button
+- [x] Retry failed write only after a duplicate-safe on-chain preflight check
 - [x] Show verification result
 - [x] Show failed/tampered status
-- [ ] Restrict page to admin role only
+- [x] Restrict page to admin role only
 
 ---
 
@@ -530,14 +539,15 @@ Auto blockchain proof
 
 ### 5.3 Real Blockchain Integration
 
-- [ ] Hardhat project setup
-- [ ] Solidity smart contract
-- [ ] Store shipment event hash on-chain
-- [ ] Deploy contract to local Hardhat network
-- [ ] Connect Spring Boot to blockchain using Web3j
-- [ ] Replace mock transaction hash with real transaction hash
-- [ ] Replace mock block number with real block number
-- [ ] Verify on-chain hash against database event hash
+- [x] Hardhat project setup
+- [x] Solidity smart contract
+- [x] Store shipment event hash on-chain
+- [x] Deploy contract to local Hardhat network
+- [x] Deploy contract to Sepolia test network
+- [x] Connect Spring Boot to blockchain using Web3j
+- [x] Store real transaction hash and block number
+- [x] Verify on-chain hash against database event hash
+- [x] Handle temporary RPC receipt failures without losing transaction identity
 
 ---
 
@@ -921,26 +931,26 @@ If hash mismatch: status becomes FAILED and admin notification is created
 
 ---
 
-## 13. Recommended Next Development Order
+## 13. Remaining Development And Evaluation
 
-Suggested next implementation order:
+Current remaining or intentionally excluded items:
 
-1. [ ] Clean validation error response
-2. [ ] Notification badge in sidebar/topbar
-3. [ ] QR code generation for shipment
-4. [ ] QR scan/open shipment page flow
-5. [ ] Login and role-based access
-6. [ ] Admin-only route protection
-7. [ ] Real blockchain with Hardhat/Solidity
-8. [ ] Web3j integration with Spring Boot
-9. [ ] Company email notification
-10. [ ] Reports and exports
+1. [ ] Complete final testing, performance evaluation, UAT, and report evidence
+2. [ ] Improve field-level validation error presentation where required
+3. [x] Notification badge in sidebar/topbar
+4. [x] Login and role-based access
+5. [x] Admin-only route protection
+6. [x] Real blockchain with Hardhat/Solidity and Sepolia deployment
+7. [x] Web3j integration with Spring Boot
+8. [x] Operational reports and CSV export
+9. [x] QR scanning excluded from the approved project scope
+10. [x] External email/Teams integration excluded from the approved project scope
 
 ---
 
 ## 14. Current Status Summary
 
-The system currently has a strong working MVP:
+The system currently has a complete working FYP application baseline:
 
 - Shipment management works
 - Frontend shipment creation works
@@ -948,14 +958,14 @@ The system currently has a strong working MVP:
 - Map visualization works
 - Alert detection works
 - Shipment event timeline works
-- Mock blockchain verification works
+- Real Sepolia blockchain recording and verification work
+- Submitted transactions retain their hash during uncertain receipt confirmation
+- Failed-record retries check the contract first to prevent duplicate writes
 - Admin blockchain monitor works
 - Admin notifications work
 
-The main remaining major features are:
+The remaining final-stage work is:
 
-- Authentication and role-based access
-- QR code workflow
-- Real blockchain smart contract integration
-- Company notification via email
-- Reports/export
+- Complete end-to-end, performance, reliability, and UAT evaluation
+- Capture final deployment and test evidence for the FYP report
+- Apply any defects found during final presentation rehearsal

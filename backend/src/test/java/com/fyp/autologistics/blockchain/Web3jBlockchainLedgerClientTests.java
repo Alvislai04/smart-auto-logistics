@@ -6,10 +6,14 @@ import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.Request;
 import org.web3j.protocol.core.methods.response.EthChainId;
 import org.web3j.protocol.core.methods.response.EthGasPrice;
+import org.web3j.protocol.core.methods.response.EthGetTransactionReceipt;
+import org.web3j.protocol.core.methods.response.TransactionReceipt;
 
+import java.io.IOException;
 import java.math.BigInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -62,5 +66,51 @@ class Web3jBlockchainLedgerClientTests {
         assertThat(client.resolveGasPriceWei(web3j))
                 .isEqualTo(BigInteger.valueOf(2_000_000_000L));
         verify(web3j, never()).ethGasPrice();
+    }
+
+    @Test
+    void receiptPollingContinuesAfterTemporaryRpcFailure() throws Exception {
+        BlockchainProperties properties = new BlockchainProperties();
+        properties.setReceiptPollingAttempts(2);
+        properties.setReceiptPollingIntervalMs(1L);
+        Web3jBlockchainLedgerClient client = new Web3jBlockchainLedgerClient(properties);
+        Web3j web3j = mock(Web3j.class);
+        @SuppressWarnings("unchecked")
+        Request<?, EthGetTransactionReceipt> request = mock(Request.class);
+        EthGetTransactionReceipt response = new EthGetTransactionReceipt();
+        TransactionReceipt expectedReceipt = new TransactionReceipt();
+        expectedReceipt.setTransactionHash("0xconfirmed");
+        expectedReceipt.setBlockNumber("0x2a");
+        expectedReceipt.setStatus("0x1");
+        response.setResult(expectedReceipt);
+
+        doReturn(request).when(web3j).ethGetTransactionReceipt("0xsubmitted");
+        when(request.send())
+                .thenThrow(new IOException("Temporary RPC failure."))
+                .thenReturn(response);
+
+        TransactionReceipt receipt = client.waitForTransactionReceipt(web3j, "0xsubmitted");
+
+        assertThat(receipt.getTransactionHash()).isEqualTo("0xconfirmed");
+        assertThat(receipt.getBlockNumber()).isEqualTo(42L);
+    }
+
+    @Test
+    void receiptPollingPreservesSubmittedHashWhenConfirmationTimesOut() throws Exception {
+        BlockchainProperties properties = new BlockchainProperties();
+        properties.setReceiptPollingAttempts(1);
+        Web3jBlockchainLedgerClient client = new Web3jBlockchainLedgerClient(properties);
+        Web3j web3j = mock(Web3j.class);
+        @SuppressWarnings("unchecked")
+        Request<?, EthGetTransactionReceipt> request = mock(Request.class);
+
+        doReturn(request).when(web3j).ethGetTransactionReceipt("0xsubmitted");
+        when(request.send()).thenThrow(new IOException("Temporary RPC failure."));
+
+        assertThatThrownBy(() -> client.waitForTransactionReceipt(web3j, "0xsubmitted"))
+                .isInstanceOf(BlockchainSubmissionPendingException.class)
+                .satisfies(exception -> assertThat(
+                        ((BlockchainSubmissionPendingException) exception).getTransactionHash()
+                ).isEqualTo("0xsubmitted"));
     }
 }

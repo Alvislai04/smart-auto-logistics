@@ -19,23 +19,25 @@ import org.web3j.protocol.core.methods.response.EthCall;
 import org.web3j.protocol.core.methods.response.EthBlockNumber;
 import org.web3j.protocol.core.methods.response.EthChainId;
 import org.web3j.protocol.core.methods.response.EthGetCode;
+import org.web3j.protocol.core.methods.response.EthGetTransactionReceipt;
 import org.web3j.protocol.core.methods.response.EthGasPrice;
 import org.web3j.protocol.core.methods.response.EthSendTransaction;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.tx.RawTransactionManager;
 import org.web3j.tx.TransactionManager;
-import org.web3j.tx.response.PollingTransactionReceiptProcessor;
-import org.web3j.tx.response.TransactionReceiptProcessor;
 
 import java.math.BigInteger;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Component
 public class Web3jBlockchainLedgerClient implements BlockchainLedgerClient {
 
     private final BlockchainProperties properties;
+    private final ReentrantLock transactionSubmissionLock = new ReentrantLock(true);
 
     public Web3jBlockchainLedgerClient(BlockchainProperties properties) {
         this.properties = properties;
@@ -48,6 +50,21 @@ public class Web3jBlockchainLedgerClient implements BlockchainLedgerClient {
             String eventHash
     ) {
         ensureBlockchainIsConfigured();
+
+        transactionSubmissionLock.lock();
+        try {
+            return submitShipmentEvent(shipmentId, shipmentEventId, eventHash);
+        } finally {
+            transactionSubmissionLock.unlock();
+        }
+    }
+
+    private BlockchainTransactionReceipt submitShipmentEvent(
+            Long shipmentId,
+            Long shipmentEventId,
+            String eventHash
+    ) {
+        String transactionHash = null;
 
         try (Web3j web3j = buildWeb3j()) {
             Credentials credentials = Credentials.create(normalizePrivateKey(properties.getPrivateKey()));
@@ -85,19 +102,23 @@ public class Web3jBlockchainLedgerClient implements BlockchainLedgerClient {
                 );
             }
 
-            TransactionReceiptProcessor receiptProcessor = new PollingTransactionReceiptProcessor(
-                    web3j,
-                    properties.getReceiptPollingIntervalMs(),
-                    properties.getReceiptPollingAttempts()
-            );
+            transactionHash = sentTransaction.getTransactionHash();
+            if (!StringUtils.hasText(transactionHash)) {
+                throw new BlockchainLedgerException(
+                        "Blockchain node accepted the request without returning a transaction hash."
+                );
+            }
 
-            TransactionReceipt receipt = receiptProcessor.waitForTransactionReceipt(
-                    sentTransaction.getTransactionHash()
-            );
+            TransactionReceipt receipt = waitForTransactionReceipt(web3j, transactionHash);
 
             if (!receipt.isStatusOK()) {
-                throw new BlockchainLedgerException(
-                        "Blockchain transaction failed with status: " + receipt.getStatus()
+                throw new BlockchainTransactionFailedException(
+                        "Blockchain transaction was mined but failed with status: "
+                                + receipt.getStatus(),
+                        transactionHash,
+                        receipt.getBlockNumber() == null
+                                ? null
+                                : receipt.getBlockNumber().longValue()
                 );
             }
 
@@ -108,11 +129,72 @@ public class Web3jBlockchainLedgerClient implements BlockchainLedgerClient {
         } catch (BlockchainLedgerException exception) {
             throw exception;
         } catch (Exception exception) {
+            if (StringUtils.hasText(transactionHash)) {
+                throw new BlockchainSubmissionPendingException(
+                        "Transaction was submitted, but confirmation is still uncertain: "
+                                + getFailureMessage(exception),
+                        transactionHash,
+                        exception
+                );
+            }
+
             throw new BlockchainLedgerException(
-                    "Failed to record shipment event on blockchain.",
+                    "Failed to record shipment event on blockchain: "
+                            + getFailureMessage(exception),
                     exception
             );
         }
+    }
+
+    TransactionReceipt waitForTransactionReceipt(
+            Web3j web3j,
+            String transactionHash
+    ) throws Exception {
+        Exception lastFailure = null;
+        int pollingAttempts = Math.max(1, properties.getReceiptPollingAttempts());
+
+        for (int attempt = 1; attempt <= pollingAttempts; attempt++) {
+            try {
+                EthGetTransactionReceipt response = web3j
+                        .ethGetTransactionReceipt(transactionHash)
+                        .send();
+
+                if (response.hasError()) {
+                    lastFailure = new BlockchainLedgerException(
+                            "Receipt request rejected: " + response.getError().getMessage()
+                    );
+                } else {
+                    Optional<TransactionReceipt> receipt = response.getTransactionReceipt();
+                    if (receipt.isPresent()) {
+                        return receipt.get();
+                    }
+                }
+            } catch (Exception exception) {
+                lastFailure = exception;
+            }
+
+            if (attempt < pollingAttempts) {
+                try {
+                    Thread.sleep(Math.max(1L, properties.getReceiptPollingIntervalMs()));
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    throw exception;
+                }
+            }
+        }
+
+        String message = "No confirmed receipt was available after "
+                + pollingAttempts
+                + " checks";
+        if (lastFailure != null) {
+            message += ". Last receipt check failed: " + getFailureMessage(lastFailure);
+        }
+
+        throw new BlockchainSubmissionPendingException(
+                message,
+                transactionHash,
+                lastFailure
+        );
     }
 
     @Override
@@ -143,13 +225,20 @@ public class Web3jBlockchainLedgerClient implements BlockchainLedgerClient {
                 );
             }
 
+            if (response.isReverted()) {
+                throw new BlockchainRecordNotFoundException(
+                        "Blockchain record was not found for shipment event #"
+                                + shipmentEventId
+                );
+            }
+
             List<Type> decodedValues = FunctionReturnDecoder.decode(
                     response.getValue(),
                     function.getOutputParameters()
             );
 
             if (decodedValues.isEmpty()) {
-                throw new BlockchainLedgerException(
+                throw new BlockchainRecordNotFoundException(
                         "Blockchain record was not found for shipment event #"
                                 + shipmentEventId
                 );
@@ -162,6 +251,58 @@ public class Web3jBlockchainLedgerClient implements BlockchainLedgerClient {
         } catch (Exception exception) {
             throw new BlockchainLedgerException(
                     "Failed to read shipment event hash from blockchain.",
+                    exception
+            );
+        }
+    }
+
+    @Override
+    public Optional<BlockchainTransactionReceipt> getTransactionReceipt(String transactionHash) {
+        ensureBlockchainIsConfigured();
+
+        if (!StringUtils.hasText(transactionHash)) {
+            throw new BlockchainLedgerException("Blockchain transaction hash is required.");
+        }
+
+        try (Web3j web3j = buildWeb3j()) {
+            EthGetTransactionReceipt response = web3j
+                    .ethGetTransactionReceipt(transactionHash)
+                    .send();
+
+            if (response.hasError()) {
+                throw new BlockchainLedgerException(
+                        "Blockchain receipt request rejected: "
+                                + response.getError().getMessage()
+                );
+            }
+
+            Optional<TransactionReceipt> receipt = response.getTransactionReceipt();
+            if (receipt.isEmpty()) {
+                return Optional.empty();
+            }
+
+            TransactionReceipt confirmedReceipt = receipt.get();
+            if (!confirmedReceipt.isStatusOK()) {
+                throw new BlockchainTransactionFailedException(
+                        "Blockchain transaction was mined but failed with status: "
+                                + confirmedReceipt.getStatus(),
+                        transactionHash,
+                        confirmedReceipt.getBlockNumber() == null
+                                ? null
+                                : confirmedReceipt.getBlockNumber().longValue()
+                );
+            }
+
+            return Optional.of(new BlockchainTransactionReceipt(
+                    confirmedReceipt.getTransactionHash(),
+                    confirmedReceipt.getBlockNumber().longValue()
+            ));
+        } catch (BlockchainLedgerException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new BlockchainLedgerException(
+                    "Failed to retrieve blockchain transaction receipt: "
+                            + getFailureMessage(exception),
                     exception
             );
         }
@@ -388,10 +529,24 @@ public class Web3jBlockchainLedgerClient implements BlockchainLedgerClient {
         }
     }
 
-    private String getFailureMessage(Exception exception) {
-        return StringUtils.hasText(exception.getMessage())
-                ? exception.getMessage()
-                : exception.getClass().getSimpleName();
+    private String getFailureMessage(Throwable exception) {
+        Throwable mostSpecificCause = exception;
+        while (mostSpecificCause.getCause() != null
+                && mostSpecificCause.getCause() != mostSpecificCause) {
+            mostSpecificCause = mostSpecificCause.getCause();
+        }
+
+        String message = StringUtils.hasText(mostSpecificCause.getMessage())
+                ? mostSpecificCause.getMessage()
+                : mostSpecificCause.getClass().getSimpleName();
+
+        String sanitizedMessage = message.replaceAll(
+                "https?://[^\\s]+",
+                "[redacted RPC endpoint]"
+        );
+        return sanitizedMessage.length() > 500
+                ? sanitizedMessage.substring(0, 500)
+                : sanitizedMessage;
     }
 
     private Web3j buildWeb3j() {

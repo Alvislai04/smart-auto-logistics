@@ -3,7 +3,10 @@ package com.fyp.autologistics.service;
 import com.fyp.autologistics.blockchain.BlockchainHealthSnapshot;
 import com.fyp.autologistics.blockchain.BlockchainLedgerClient;
 import com.fyp.autologistics.blockchain.BlockchainLedgerException;
+import com.fyp.autologistics.blockchain.BlockchainRecordNotFoundException;
+import com.fyp.autologistics.blockchain.BlockchainSubmissionPendingException;
 import com.fyp.autologistics.blockchain.BlockchainTransactionReceipt;
+import com.fyp.autologistics.blockchain.BlockchainTransactionFailedException;
 import com.fyp.autologistics.config.BlockchainProperties;
 import com.fyp.autologistics.dto.BlockchainHealthResponse;
 import com.fyp.autologistics.dto.BlockchainRecordResponse;
@@ -16,6 +19,8 @@ import com.fyp.autologistics.exception.BadRequestException;
 import com.fyp.autologistics.exception.ResourceNotFoundException;
 import com.fyp.autologistics.repository.BlockchainRecordRepository;
 import com.fyp.autologistics.repository.ShipmentEventRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -30,6 +35,8 @@ import java.util.Optional;
 
 @Service
 public class BlockchainRecordService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(BlockchainRecordService.class);
 
     private final BlockchainRecordRepository blockchainRecordRepository;
     private final ShipmentEventRepository shipmentEventRepository;
@@ -138,6 +145,19 @@ public class BlockchainRecordService {
         );
         blockchainRecord.setLastRetryAt(LocalDateTime.now());
 
+        if (recoverAlreadyRecordedEvent(blockchainRecord)) {
+            BlockchainRecord recoveredRecord = blockchainRecordRepository.save(blockchainRecord);
+            if (recoveredRecord.getStatus() == BlockchainRecordStatus.RECORDED) {
+                adminNotificationService.markUnreadReferenceNotificationsAsRead(
+                        "BLOCKCHAIN_RECORD",
+                        recoveredRecord.getId()
+                );
+            } else {
+                createBlockchainFailureNotification(recoveredRecord);
+            }
+            return mapToResponse(recoveredRecord);
+        }
+
         try {
             BlockchainTransactionReceipt receipt = blockchainLedgerClient.recordShipmentEvent(
                     blockchainRecord.getShipmentId(),
@@ -152,6 +172,10 @@ public class BlockchainRecordService {
                     "Blockchain recording retry succeeded. The original stored shipment event "
                             + "hash is now on-chain."
             );
+        } catch (BlockchainSubmissionPendingException exception) {
+            applyPendingSubmission(blockchainRecord, exception);
+        } catch (BlockchainTransactionFailedException exception) {
+            applyFailedTransaction(blockchainRecord, exception);
         } catch (BlockchainLedgerException exception) {
             blockchainRecord.setStatus(BlockchainRecordStatus.FAILED);
             blockchainRecord.setVerificationMessage(
@@ -166,7 +190,7 @@ public class BlockchainRecordService {
                     "BLOCKCHAIN_RECORD",
                     savedRecord.getId()
             );
-        } else {
+        } else if (savedRecord.getStatus() == BlockchainRecordStatus.FAILED) {
             createBlockchainFailureNotification(savedRecord);
         }
 
@@ -196,6 +220,23 @@ public class BlockchainRecordService {
             onChainHash = blockchainLedgerClient.getRecordedEventHash(
                     blockchainRecord.getShipmentEventId()
             );
+        } catch (BlockchainRecordNotFoundException exception) {
+            if (blockchainRecord.getStatus() == BlockchainRecordStatus.PENDING
+                    && StringUtils.hasText(blockchainRecord.getTransactionHash())) {
+                blockchainRecord.setVerificationMessage(
+                        "The submitted blockchain transaction is still awaiting confirmation."
+                );
+                return mapToResponse(blockchainRecordRepository.save(blockchainRecord));
+            }
+
+            blockchainRecord.setStatus(BlockchainRecordStatus.FAILED);
+            blockchainRecord.setVerificationMessage(
+                    "Unable to verify because no on-chain record exists for this shipment event."
+            );
+
+            BlockchainRecord savedRecord = blockchainRecordRepository.save(blockchainRecord);
+            createBlockchainFailureNotification(savedRecord);
+            return mapToResponse(savedRecord);
         } catch (BlockchainLedgerException exception) {
             blockchainRecord.setStatus(BlockchainRecordStatus.FAILED);
             blockchainRecord.setVerificationMessage(
@@ -212,6 +253,7 @@ public class BlockchainRecordService {
 
         if (localHashMatchesEvent && onChainHashMatchesRecord) {
             blockchainRecord.setStatus(BlockchainRecordStatus.RECORDED);
+            backfillConfirmedTransactionProof(blockchainRecord);
             blockchainRecord.setVerificationMessage(
                     "Blockchain record verified successfully. Local event hash matches the "
                             + "on-chain ledger hash."
@@ -322,6 +364,10 @@ public class BlockchainRecordService {
             blockchainRecord.setBlockNumber(receipt.blockNumber());
             blockchainRecord.setStatus(BlockchainRecordStatus.RECORDED);
             blockchainRecord.setVerificationMessage("Shipment event hash recorded on blockchain.");
+        } catch (BlockchainSubmissionPendingException exception) {
+            applyPendingSubmission(blockchainRecord, exception);
+        } catch (BlockchainTransactionFailedException exception) {
+            applyFailedTransaction(blockchainRecord, exception);
         } catch (BlockchainLedgerException exception) {
             blockchainRecord.setStatus(BlockchainRecordStatus.FAILED);
             blockchainRecord.setVerificationMessage(
@@ -336,6 +382,84 @@ public class BlockchainRecordService {
         }
 
         return savedRecord;
+    }
+
+    private boolean recoverAlreadyRecordedEvent(BlockchainRecord blockchainRecord) {
+        try {
+            String onChainHash = blockchainLedgerClient.getRecordedEventHash(
+                    blockchainRecord.getShipmentEventId()
+            );
+
+            blockchainRecord.setVerifiedAt(LocalDateTime.now());
+            if (hashesMatch(blockchainRecord.getEventHash(), onChainHash)) {
+                blockchainRecord.setStatus(BlockchainRecordStatus.RECORDED);
+                blockchainRecord.setVerificationMessage(
+                        "The earlier transaction was already confirmed on-chain. The local "
+                                + "record has been recovered without submitting a duplicate."
+                );
+            } else {
+                blockchainRecord.setStatus(BlockchainRecordStatus.FAILED);
+                blockchainRecord.setVerificationMessage(
+                        "Retry blocked because this shipment event already exists on-chain with "
+                                + "a different hash. Review it as a possible integrity issue."
+                );
+            }
+            return true;
+        } catch (BlockchainRecordNotFoundException exception) {
+            return false;
+        } catch (BlockchainLedgerException exception) {
+            blockchainRecord.setStatus(BlockchainRecordStatus.FAILED);
+            blockchainRecord.setVerificationMessage(
+                    "Retry was not submitted because the preflight blockchain check failed: "
+                            + exception.getMessage()
+            );
+            return true;
+        }
+    }
+
+    private void applyPendingSubmission(
+            BlockchainRecord blockchainRecord,
+            BlockchainSubmissionPendingException exception
+    ) {
+        blockchainRecord.setTransactionHash(exception.getTransactionHash());
+        blockchainRecord.setStatus(BlockchainRecordStatus.PENDING);
+        blockchainRecord.setVerificationMessage(
+                "Blockchain transaction submitted and awaiting confirmation. Transaction hash: "
+                        + exception.getTransactionHash()
+        );
+    }
+
+    private void applyFailedTransaction(
+            BlockchainRecord blockchainRecord,
+            BlockchainTransactionFailedException exception
+    ) {
+        blockchainRecord.setTransactionHash(exception.getTransactionHash());
+        blockchainRecord.setBlockNumber(exception.getBlockNumber());
+        blockchainRecord.setStatus(BlockchainRecordStatus.FAILED);
+        blockchainRecord.setVerificationMessage(
+                "Blockchain transaction was mined but failed: " + exception.getMessage()
+        );
+    }
+
+    private void backfillConfirmedTransactionProof(BlockchainRecord blockchainRecord) {
+        if (!StringUtils.hasText(blockchainRecord.getTransactionHash())
+                || blockchainRecord.getBlockNumber() != null) {
+            return;
+        }
+
+        try {
+            blockchainLedgerClient.getTransactionReceipt(blockchainRecord.getTransactionHash())
+                    .ifPresent(receipt -> {
+                        blockchainRecord.setTransactionHash(receipt.transactionHash());
+                        blockchainRecord.setBlockNumber(receipt.blockNumber());
+                    });
+        } catch (BlockchainLedgerException exception) {
+            LOGGER.warn(
+                    "Unable to backfill transaction proof for blockchain record {}: {}",
+                    blockchainRecord.getId(),
+                    exception.getMessage()
+            );
+        }
     }
 
     private void validateRecordCanBeRetried(BlockchainRecord blockchainRecord) {

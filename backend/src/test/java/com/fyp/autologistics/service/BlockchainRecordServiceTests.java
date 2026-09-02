@@ -3,6 +3,8 @@ package com.fyp.autologistics.service;
 import com.fyp.autologistics.blockchain.BlockchainHealthSnapshot;
 import com.fyp.autologistics.blockchain.BlockchainLedgerClient;
 import com.fyp.autologistics.blockchain.BlockchainLedgerException;
+import com.fyp.autologistics.blockchain.BlockchainRecordNotFoundException;
+import com.fyp.autologistics.blockchain.BlockchainSubmissionPendingException;
 import com.fyp.autologistics.blockchain.BlockchainTransactionReceipt;
 import com.fyp.autologistics.config.BlockchainProperties;
 import com.fyp.autologistics.dto.BlockchainHealthResponse;
@@ -79,6 +81,8 @@ class BlockchainRecordServiceTests {
         BlockchainRecord failedRecord = savedRecordReference.get();
 
         assertThat(initialResponse.getStatus()).isEqualTo(BlockchainRecordStatus.FAILED);
+        when(blockchainLedgerClient.getRecordedEventHash(101L))
+                .thenThrow(new BlockchainRecordNotFoundException("Not recorded."));
         when(blockchainRecordRepository.findByIdForUpdate(88L))
                 .thenReturn(Optional.of(failedRecord));
         when(shipmentEventRepository.findById(101L)).thenReturn(Optional.of(shipmentEvent));
@@ -129,6 +133,8 @@ class BlockchainRecordServiceTests {
         when(blockchainRecordRepository.findByIdForUpdate(92L))
                 .thenReturn(Optional.of(record));
         when(shipmentEventRepository.findById(101L)).thenReturn(Optional.of(shipmentEvent));
+        when(blockchainLedgerClient.getRecordedEventHash(101L))
+                .thenThrow(new BlockchainRecordNotFoundException("Not recorded."));
         when(blockchainLedgerClient.recordShipmentEvent(any(), any(), any()))
                 .thenThrow(new BlockchainLedgerException("Integration disabled."));
         when(blockchainRecordRepository.save(record)).thenReturn(record);
@@ -143,6 +149,97 @@ class BlockchainRecordServiceTests {
                 101L,
                 "original-stored-hash"
         );
+    }
+
+    @Test
+    void submittedTransactionWithoutReceiptRemainsPendingAndKeepsTransactionHash() {
+        ShipmentEvent shipmentEvent = buildShipmentEvent();
+
+        when(blockchainRecordRepository.findByShipmentEventId(101L))
+                .thenReturn(Optional.empty());
+        when(blockchainRecordRepository.save(any(BlockchainRecord.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(blockchainLedgerClient.recordShipmentEvent(any(), any(), any()))
+                .thenThrow(new BlockchainSubmissionPendingException(
+                        "Confirmation pending.",
+                        "0xsubmitted",
+                        null
+                ));
+
+        BlockchainRecordResponse response = blockchainRecordService
+                .recordShipmentEventAutomatically(shipmentEvent)
+                .orElseThrow();
+
+        assertThat(response.getStatus()).isEqualTo(BlockchainRecordStatus.PENDING);
+        assertThat(response.getTransactionHash()).isEqualTo("0xsubmitted");
+        verify(adminNotificationService, never()).createUnreadNotificationIfNotExists(
+                any(), any(), any(), any(), any()
+        );
+    }
+
+    @Test
+    void retryRecoversMatchingEventAlreadyConfirmedOnChainWithoutDuplicateWrite() {
+        ShipmentEvent shipmentEvent = buildShipmentEvent();
+        BlockchainRecord record = new BlockchainRecord();
+        ReflectionTestUtils.setField(record, "id", 93L);
+        record.setShipmentId(7L);
+        record.setShipmentEventId(101L);
+        record.setEventHash("matching-on-chain-hash");
+        record.setStatus(BlockchainRecordStatus.FAILED);
+
+        when(blockchainRecordRepository.findByIdForUpdate(93L))
+                .thenReturn(Optional.of(record));
+        when(shipmentEventRepository.findById(101L)).thenReturn(Optional.of(shipmentEvent));
+        when(blockchainLedgerClient.getRecordedEventHash(101L))
+                .thenReturn("0xmatching-on-chain-hash");
+        when(blockchainRecordRepository.save(record)).thenReturn(record);
+
+        BlockchainRecordResponse response = blockchainRecordService.retryFailedRecord(93L);
+
+        assertThat(response.getStatus()).isEqualTo(BlockchainRecordStatus.RECORDED);
+        assertThat(response.getVerificationMessage()).contains("recovered");
+        verify(blockchainLedgerClient, never()).recordShipmentEvent(any(), any(), any());
+        verify(adminNotificationService).markUnreadReferenceNotificationsAsRead(
+                "BLOCKCHAIN_RECORD",
+                93L
+        );
+    }
+
+    @Test
+    void verificationCompletesPendingRecordAndBackfillsConfirmedBlockNumber() {
+        ShipmentEvent shipmentEvent = buildShipmentEvent();
+        AtomicReference<BlockchainRecord> savedRecordReference = new AtomicReference<>();
+
+        when(blockchainRecordRepository.findByShipmentEventId(101L))
+                .thenReturn(Optional.empty());
+        when(blockchainRecordRepository.save(any(BlockchainRecord.class)))
+                .thenAnswer(invocation -> {
+                    BlockchainRecord record = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(record, "id", 94L);
+                    savedRecordReference.set(record);
+                    return record;
+                });
+        when(blockchainLedgerClient.recordShipmentEvent(any(), any(), any()))
+                .thenThrow(new BlockchainSubmissionPendingException(
+                        "Confirmation pending.",
+                        "0xsubmitted",
+                        null
+                ));
+
+        blockchainRecordService.recordShipmentEventAutomatically(shipmentEvent).orElseThrow();
+        BlockchainRecord pendingRecord = savedRecordReference.get();
+        when(blockchainRecordRepository.findById(94L)).thenReturn(Optional.of(pendingRecord));
+        when(shipmentEventRepository.findById(101L)).thenReturn(Optional.of(shipmentEvent));
+        when(blockchainLedgerClient.getRecordedEventHash(101L))
+                .thenReturn(pendingRecord.getEventHash());
+        when(blockchainLedgerClient.getTransactionReceipt("0xsubmitted"))
+                .thenReturn(Optional.of(new BlockchainTransactionReceipt("0xsubmitted", 77L)));
+
+        BlockchainRecordResponse response = blockchainRecordService.verifyRecord(94L);
+
+        assertThat(response.getStatus()).isEqualTo(BlockchainRecordStatus.RECORDED);
+        assertThat(response.getTransactionHash()).isEqualTo("0xsubmitted");
+        assertThat(response.getBlockNumber()).isEqualTo(77L);
     }
 
     @Test
